@@ -40,6 +40,20 @@ func BackupAll(client incusapi.Client, root string, now time.Time) (string, erro
     includes = append(includes, "profiles")
     files = append(files, "profiles.json")
 
+    // Networks
+    if err := writeNetworks(client, snapDir); err != nil {
+        return "", err
+    }
+    includes = append(includes, "networks")
+    files = append(files, "networks.json")
+
+    // Storage pools
+    if err := writeStoragePools(client, snapDir); err != nil {
+        return "", err
+    }
+    includes = append(includes, "storage_pools")
+    files = append(files, "storage_pools.json")
+
     // Manifest + checksums
     mf := Manifest{Type: "config", CreatedAt: now.UTC(), Includes: includes}
     if err := writeJSON(filepath.Join(snapDir, "manifest.json"), mf); err != nil {
@@ -105,6 +119,20 @@ func writeProfiles(client incusapi.Client, snapDir string) error {
     }
     sort.Slice(profiles, func(i, j int) bool { return profiles[i].Name < profiles[j].Name })
     return writeJSON(filepath.Join(snapDir, "profiles.json"), profiles)
+}
+
+func writeNetworks(client incusapi.Client, snapDir string) error {
+    nets, err := client.ListNetworks()
+    if err != nil { return err }
+    sort.Slice(nets, func(i, j int) bool { return nets[i].Name < nets[j].Name })
+    return writeJSON(filepath.Join(snapDir, "networks.json"), nets)
+}
+
+func writeStoragePools(client incusapi.Client, snapDir string) error {
+    pools, err := client.ListStoragePools()
+    if err != nil { return err }
+    sort.Slice(pools, func(i, j int) bool { return pools[i].Name < pools[j].Name })
+    return writeJSON(filepath.Join(snapDir, "storage_pools.json"), pools)
 }
 
 func writeJSON(path string, v any) error {

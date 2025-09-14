@@ -34,3 +34,18 @@ func TestBackupAll_WritesProfiles(t *testing.T) {
     }
 }
 
+func TestBackupAll_WritesNetworksAndPools(t *testing.T) {
+    root := t.TempDir()
+    fake := incusapi.NewFake()
+    fake.NetworksMap["br0"] = incusapi.Network{Name: "br0", Managed: true, Type: "bridge", Config: map[string]string{"ipv4.address": "auto"}}
+    fake.StoragePoolsMap["default"] = incusapi.StoragePool{Name: "default", Driver: "dir", Config: map[string]string{"source": "/var/lib/incus/storage-pools/default"}}
+
+    now := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+    dir, err := cfg.BackupAll(fake, root, now)
+    if err != nil { t.Fatalf("backup all: %v", err) }
+    for _, f := range []string{"networks.json", "storage_pools.json"} {
+        if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+            t.Fatalf("missing %s: %v", f, err)
+        }
+    }
+}

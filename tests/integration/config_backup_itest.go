@@ -64,8 +64,8 @@ func TestConfigBackupAndPreview(t *testing.T) {
     sort.Strings(snaps)
     latest := snaps[len(snaps)-1]
     snapPath := filepath.Join(cfgDir, latest)
-    // Ensure expected files exist
-    for _, f := range []string{"projects.json", "profiles.json", "manifest.json", "checksums.txt"} {
+    // Ensure expected files exist (networks may be empty but file should exist)
+    for _, f := range []string{"projects.json", "profiles.json", "networks.json", "storage_pools.json", "manifest.json", "checksums.txt"} {
         if _, err := os.Stat(filepath.Join(snapPath, f)); err != nil {
             t.Fatalf("missing %s: %v", f, err)
         }

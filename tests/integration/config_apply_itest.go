@@ -80,11 +80,13 @@ func TestConfigRestoreApply_Projects(t *testing.T) {
         }
     }
 
-    // Verify project exists again
+    // Verify project exists again and config was applied
     projects, err := client.ListProjects()
     if err != nil { t.Fatalf("list projects: %v", err) }
-    found := false
-    for _, p := range projects { if p.Name == name { found = true; break } }
-    if !found { t.Fatalf("expected project %s to be recreated", name) }
+    var cfg map[string]string
+    for _, p := range projects { if p.Name == name { cfg = p.Config; break } }
+    if cfg == nil { t.Fatalf("expected project %s to be recreated", name) }
+    if cfg["features.images"] != "true" {
+        t.Fatalf("expected features.images=true after apply; got %v", cfg)
+    }
 }
-

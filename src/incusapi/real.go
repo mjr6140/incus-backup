@@ -88,3 +88,38 @@ func convertDevices(in map[string]map[string]string) map[string]map[string]strin
     }
     return out
 }
+
+func (r *RealClient) ListNetworks() ([]Network, error) {
+    nets, err := r.c.GetNetworks()
+    if err != nil {
+        return nil, err
+    }
+    out := make([]Network, 0, len(nets))
+    for _, n := range nets {
+        out = append(out, Network{
+            Name:        n.Name,
+            Description: n.Description,
+            Managed:     n.Managed,
+            Type:        n.Type,
+            Config:      n.Config,
+        })
+    }
+    return out, nil
+}
+
+func (r *RealClient) ListStoragePools() ([]StoragePool, error) {
+    pools, err := r.c.GetStoragePools()
+    if err != nil {
+        return nil, err
+    }
+    out := make([]StoragePool, 0, len(pools))
+    for _, p := range pools {
+        out = append(out, StoragePool{
+            Name:        p.Name,
+            Driver:      p.Driver,
+            Description: p.Description,
+            Config:      p.Config,
+        })
+    }
+    return out, nil
+}

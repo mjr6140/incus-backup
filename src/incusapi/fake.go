@@ -7,10 +7,17 @@ type FakeClient struct {
     ServerVersionStr string
     ProjectsMap      map[string]Project
     ProfilesMap      map[string]Profile
+    NetworksMap      map[string]Network
+    StoragePoolsMap  map[string]StoragePool
 }
 
 func NewFake() *FakeClient {
-    return &FakeClient{ProjectsMap: map[string]Project{}, ProfilesMap: map[string]Profile{}}
+    return &FakeClient{
+        ProjectsMap:     map[string]Project{},
+        ProfilesMap:     map[string]Profile{},
+        NetworksMap:     map[string]Network{},
+        StoragePoolsMap: map[string]StoragePool{},
+    }
 }
 
 func (f *FakeClient) Server() (ServerInfo, error) {
@@ -65,6 +72,24 @@ func (f *FakeClient) UpdateProject(name string, config map[string]string) error 
 func (f *FakeClient) ListProfiles() ([]Profile, error) {
     out := make([]Profile, 0, len(f.ProfilesMap))
     for _, p := range f.ProfilesMap {
+        out = append(out, p)
+    }
+    sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+    return out, nil
+}
+
+func (f *FakeClient) ListNetworks() ([]Network, error) {
+    out := make([]Network, 0, len(f.NetworksMap))
+    for _, n := range f.NetworksMap {
+        out = append(out, n)
+    }
+    sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+    return out, nil
+}
+
+func (f *FakeClient) ListStoragePools() ([]StoragePool, error) {
+    out := make([]StoragePool, 0, len(f.StoragePoolsMap))
+    for _, p := range f.StoragePoolsMap {
         out = append(out, p)
     }
     sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })

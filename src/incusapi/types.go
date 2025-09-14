@@ -14,6 +14,23 @@ type Profile struct {
     Devices     map[string]map[string]string
 }
 
+// Network captures minimal managed network info.
+type Network struct {
+    Name        string
+    Description string
+    Managed     bool
+    Type        string
+    Config      map[string]string
+}
+
+// StoragePool captures minimal storage pool info.
+type StoragePool struct {
+    Name        string
+    Driver      string
+    Description string
+    Config      map[string]string
+}
+
 // ServerInfo exposes key server metadata we care about.
 type ServerInfo struct {
     ServerVersion string
@@ -33,4 +50,10 @@ type Client interface {
 
     // Profiles
     ListProfiles() ([]Profile, error)
+
+    // Networks
+    ListNetworks() ([]Network, error)
+
+    // Storage pools
+    ListStoragePools() ([]StoragePool, error)
 }
