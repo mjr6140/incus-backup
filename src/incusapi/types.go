@@ -75,7 +75,7 @@ type Client interface {
     ListInstances(project string) ([]Instance, error)
     // ExportInstance returns a tar stream of the instance export. If snapshot is non-empty,
     // it should export from that snapshot. If optimized is true, use backend-optimized export.
-    ExportInstance(project, name string, optimized bool, snapshot string) (io.ReadCloser, error)
+    ExportInstance(project, name string, optimized bool, snapshot string, progress io.Writer) (io.ReadCloser, error)
     // ImportInstance creates/restores an instance from the given tar stream with optional target name.
     // If progress is non-nil, server-side status updates may be written to it.
     ImportInstance(project, targetName string, r io.Reader, progress io.Writer) error

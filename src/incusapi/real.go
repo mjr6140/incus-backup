@@ -8,6 +8,7 @@ import (
     "time"
     incuscli "github.com/lxc/incus/client"
     "github.com/lxc/incus/shared/api"
+    "github.com/lxc/incus/shared/ioprogress"
     "fmt"
 )
 
@@ -190,7 +191,7 @@ func (r *RealClient) ListInstances(project string) ([]Instance, error) {
     return out, nil
 }
 
-func (r *RealClient) ExportInstance(project, name string, optimized bool, snapshot string) (io.ReadCloser, error) {
+func (r *RealClient) ExportInstance(project, name string, optimized bool, snapshot string, progressOut io.Writer) (io.ReadCloser, error) {
     srv := r.c
     if project != "" && project != "default" { srv = srv.UseProject(project) }
     req := api.InstanceBackupsPost{
@@ -201,8 +202,33 @@ func (r *RealClient) ExportInstance(project, name string, optimized bool, snapsh
     }
     op, err := srv.CreateInstanceBackup(name, req)
     if err != nil { return nil, err }
-    // Wait for completion
-    if err := op.Wait(); err != nil { return nil, err }
+    // Show server-side backup creation status
+    if progressOut != nil {
+        var last string
+        ticker := time.NewTicker(1 * time.Second)
+        defer ticker.Stop()
+        for {
+            _ = op.Refresh()
+            st := op.Get().Status
+            if st != "" && st != last {
+                fmt.Fprintf(progressOut, "\r[server] %s", st)
+                last = st
+            }
+            if err := op.Wait(); err == nil {
+                // Ensure final status printed
+                _ = op.Refresh()
+                st2 := op.Get().Status
+                if st2 != "" && st2 != last {
+                    fmt.Fprintf(progressOut, "\r[server] %s", st2)
+                }
+                fmt.Fprint(progressOut, "\n")
+                break
+            }
+            <-ticker.C
+        }
+    } else {
+        if err := op.Wait(); err != nil { return nil, err }
+    }
     // Determine backup name from operation resources
     resources := op.Get().Resources
     if len(resources["backups"]) == 0 {
@@ -211,17 +237,23 @@ func (r *RealClient) ExportInstance(project, name string, optimized bool, snapsh
     backupURL := resources["backups"][0]
     // Extract the last path segment as name
     seg := backupURL[strings.LastIndex(backupURL, "/")+1:]
-    // Prepare a temp file and download
+    // Prepare a temp file and download with progress
     f, err := os.CreateTemp("", "incus-export-*.tar")
     if err != nil { return nil, err }
     // Ensure cleanup of server-side backup once done
     defer func() { go func() { bop, _ := srv.DeleteInstanceBackup(name, seg); if bop != nil { _ = bop.Wait() } }() }()
     // Download into the temp file
     reqFile := incuscli.BackupFileRequest{BackupFile: f}
+    if progressOut != nil {
+        reqFile.ProgressHandler = func(pd ioprogress.ProgressData) {
+            fmt.Fprintf(progressOut, "\r[download] %s", pd.Text)
+        }
+    }
     if _, err := srv.GetInstanceBackupFile(name, seg, &reqFile); err != nil {
         _ = f.Close(); _ = os.Remove(f.Name())
         return nil, err
     }
+    if progressOut != nil { fmt.Fprint(progressOut, "\n") }
     if _, err := f.Seek(0, io.SeekStart); err != nil { _ = f.Close(); _ = os.Remove(f.Name()); return nil, err }
     // Return a ReadCloser that deletes the temp file on close
     return &tempFileReadCloser{File: f}, nil

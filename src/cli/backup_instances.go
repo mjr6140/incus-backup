@@ -34,7 +34,7 @@ func newBackupInstancesCmd(stdout, stderr io.Writer) *cobra.Command {
                 for _, i := range insts { names = append(names, i.Name) }
             }
             for _, name := range names {
-                if _, err := inst.BackupInstance(client, tgt.DirPath, project, name, optimized, !noSnapshot, time.Now()); err != nil { return err }
+                if _, err := inst.BackupInstance(client, tgt.DirPath, project, name, optimized, !noSnapshot, time.Now(), stdout); err != nil { return err }
             }
             return nil
         },
@@ -45,4 +45,3 @@ func newBackupInstancesCmd(stdout, stderr io.Writer) *cobra.Command {
     cmd.Flags().BoolVar(&noSnapshot, "no-snapshot", false, "Do not create a temporary snapshot before export")
     return cmd
 }
-

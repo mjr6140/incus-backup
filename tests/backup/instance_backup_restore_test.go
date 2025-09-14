@@ -18,7 +18,7 @@ func TestInstanceBackupAndRestore_WithFakeClient(t *testing.T) {
     fake.Instances["default"]["web"] = []byte("EXPORT-WEB")
 
     now := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
-    dir, err := inst.BackupInstance(fake, root, "default", "web", false, true, now)
+    dir, err := inst.BackupInstance(fake, root, "default", "web", false, true, now, nil)
     if err != nil { t.Fatalf("backup instance: %v", err) }
 
     // Files exist

@@ -11,11 +11,12 @@ import (
     "time"
 
     "incus-backup/src/incusapi"
+    pg "incus-backup/src/util/progress"
 )
 
 // BackupInstance exports a single instance to the directory backend layout.
 // It creates instances/<project>/<name>/<timestamp>/export.tar.xz and writes a manifest and checksums.
-func BackupInstance(client incusapi.Client, root, project, name string, optimized bool, snapshot bool, now time.Time) (string, error) {
+func BackupInstance(client incusapi.Client, root, project, name string, optimized bool, snapshot bool, now time.Time, progressOut io.Writer) (string, error) {
     ts := now.UTC().Format("20060102T150405Z")
     snapDir := filepath.Join(root, "instances", project, name, ts)
     if err := os.MkdirAll(snapDir, 0o755); err != nil { return "", err }
@@ -25,14 +26,19 @@ func BackupInstance(client incusapi.Client, root, project, name string, optimize
         // Snapshot mechanics are handled by client.ExportInstance when snapshot name is provided
         snapName = "tmp-incus-backup"
     }
-    r, err := client.ExportInstance(project, name, optimized, snapName)
+    r, err := client.ExportInstance(project, name, optimized, snapName, progressOut)
     if err != nil { return "", err }
     defer r.Close()
 
     exportPath := filepath.Join(snapDir, "export.tar.xz")
     f, err := os.Create(exportPath)
     if err != nil { return "", err }
-    if _, err := io.Copy(f, r); err != nil { f.Close(); return "", err }
+    // Wrap reader with local write progress if size known
+    reader := io.Reader(r)
+    if s, ok := r.(interface{ Stat() (os.FileInfo, error) }); ok && progressOut != nil {
+        if fi, err := s.Stat(); err == nil { reader = pg.NewReader(r, fi.Size(), "write", progressOut) }
+    }
+    if _, err := io.Copy(f, reader); err != nil { f.Close(); return "", err }
     if err := f.Close(); err != nil { return "", err }
 
     mf := Manifest{
@@ -80,4 +86,3 @@ func sha256File(path string) (string, error) {
     if _, err := io.Copy(h, f); err != nil { return "", err }
     return hex.EncodeToString(h.Sum(nil)), nil
 }
-

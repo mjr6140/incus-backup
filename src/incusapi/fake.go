@@ -161,7 +161,7 @@ func (f *FakeClient) ListInstances(project string) ([]Instance, error) {
     return out, nil
 }
 
-func (f *FakeClient) ExportInstance(project, name string, optimized bool, snapshot string) (io.ReadCloser, error) {
+func (f *FakeClient) ExportInstance(project, name string, optimized bool, snapshot string, _ io.Writer) (io.ReadCloser, error) {
     if f.Instances[project] == nil {
         return io.NopCloser(bytes.NewReader([]byte(""))), nil
     }
