@@ -33,8 +33,12 @@ func newBackupInstancesCmd(stdout, stderr io.Writer) *cobra.Command {
                 if err != nil { return err }
                 for _, i := range insts { names = append(names, i.Name) }
             }
-            for _, name := range names {
+            total := len(names)
+            for idx, name := range names {
+                // Per-instance header to indicate progress across many instances
+                fmt.Fprintf(stdout, "[%d/%d] Backing up instance %s/%s\n", idx+1, total, project, name)
                 if _, err := inst.BackupInstance(client, tgt.DirPath, project, name, optimized, !noSnapshot, time.Now(), stdout); err != nil { return err }
+                fmt.Fprintf(stdout, "[%d/%d] Done %s/%s\n", idx+1, total, project, name)
             }
             return nil
         },
