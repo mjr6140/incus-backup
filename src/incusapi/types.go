@@ -77,7 +77,8 @@ type Client interface {
     // it should export from that snapshot. If optimized is true, use backend-optimized export.
     ExportInstance(project, name string, optimized bool, snapshot string) (io.ReadCloser, error)
     // ImportInstance creates/restores an instance from the given tar stream with optional target name.
-    ImportInstance(project, targetName string, r io.Reader) error
+    // If progress is non-nil, server-side status updates may be written to it.
+    ImportInstance(project, targetName string, r io.Reader, progress io.Writer) error
 
     // Instance lifecycle helpers
     InstanceExists(project, name string) (bool, error)

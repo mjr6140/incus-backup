@@ -28,5 +28,5 @@ func RestoreInstance(client incusapi.Client, snapDir, project, targetName string
     if st, err := os.Stat(exportPath); err == nil && progressOut != nil {
         reader = pg.NewReader(f, st.Size(), "import", progressOut)
     }
-    return client.ImportInstance(project, targetName, io.NopCloser(reader))
+    return client.ImportInstance(project, targetName, reader, progressOut)
 }

@@ -7,6 +7,7 @@ import (
     "strings"
     incuscli "github.com/lxc/incus/client"
     "github.com/lxc/incus/shared/api"
+    "fmt"
 )
 
 // RealClient wraps the official Incus Go client.
@@ -225,13 +226,24 @@ func (r *RealClient) ExportInstance(project, name string, optimized bool, snapsh
     return &tempFileReadCloser{File: f}, nil
 }
 
-func (r *RealClient) ImportInstance(project, targetName string, rstream io.Reader) error {
+func (r *RealClient) ImportInstance(project, targetName string, rstream io.Reader, progressOut io.Writer) error {
     srv := r.c
     if project != "" && project != "default" { srv = srv.UseProject(project) }
     args := incuscli.InstanceBackupArgs{BackupFile: rstream, Name: targetName}
     op, err := srv.CreateInstanceFromBackup(args)
     if err != nil { return err }
-    return op.Wait()
+    if progressOut != nil {
+        _, _ = op.AddHandler(func(o api.Operation) {
+            // Print basic server-side status updates.
+            // Avoid excessive chatter by printing only when status changes.
+            fmt.Fprintf(progressOut, "\r[server] %s", o.Status)
+        })
+    }
+    err = op.Wait()
+    if progressOut != nil {
+        fmt.Fprint(progressOut, "\n")
+    }
+    return err
 }
 
 type tempFileReadCloser struct{ *os.File }

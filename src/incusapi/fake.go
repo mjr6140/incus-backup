@@ -173,7 +173,7 @@ func (f *FakeClient) ExportInstance(project, name string, optimized bool, snapsh
     return io.NopCloser(bytes.NewReader(data)), nil
 }
 
-func (f *FakeClient) ImportInstance(project, targetName string, r io.Reader) error {
+func (f *FakeClient) ImportInstance(project, targetName string, r io.Reader, _ io.Writer) error {
     if f.Instances[project] == nil { f.Instances[project] = map[string][]byte{} }
     b, err := io.ReadAll(r)
     if err != nil { return err }
