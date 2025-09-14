@@ -236,3 +236,33 @@ func (r *RealClient) ImportInstance(project, targetName string, rstream io.Reade
 
 type tempFileReadCloser struct{ *os.File }
 func (t *tempFileReadCloser) Close() error { name := t.Name(); err := t.File.Close(); _ = os.Remove(name); return err }
+
+func (r *RealClient) InstanceExists(project, name string) (bool, error) {
+    srv := r.c
+    if project != "" && project != "default" { srv = srv.UseProject(project) }
+    _, _, err := srv.GetInstance(name)
+    if err != nil {
+        if strings.Contains(err.Error(), "not found") {
+            return false, nil
+        }
+        return false, err
+    }
+    return true, nil
+}
+
+func (r *RealClient) StopInstance(project, name string, force bool) error {
+    srv := r.c
+    if project != "" && project != "default" { srv = srv.UseProject(project) }
+    put := api.InstanceStatePut{Action: "stop", Force: force, Timeout: 60}
+    op, err := srv.UpdateInstanceState(name, put, "")
+    if err != nil { return err }
+    return op.Wait()
+}
+
+func (r *RealClient) DeleteInstance(project, name string) error {
+    srv := r.c
+    if project != "" && project != "default" { srv = srv.UseProject(project) }
+    op, err := srv.DeleteInstance(name)
+    if err != nil { return err }
+    return op.Wait()
+}

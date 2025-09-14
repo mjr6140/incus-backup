@@ -78,4 +78,9 @@ type Client interface {
     ExportInstance(project, name string, optimized bool, snapshot string) (io.ReadCloser, error)
     // ImportInstance creates/restores an instance from the given tar stream with optional target name.
     ImportInstance(project, targetName string, r io.Reader) error
+
+    // Instance lifecycle helpers
+    InstanceExists(project, name string) (bool, error)
+    StopInstance(project, name string, force bool) error
+    DeleteInstance(project, name string) error
 }

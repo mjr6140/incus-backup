@@ -183,6 +183,24 @@ func (f *FakeClient) ImportInstance(project, targetName string, r io.Reader) err
     return nil
 }
 
+func (f *FakeClient) InstanceExists(project, name string) (bool, error) {
+    if f.Instances[project] == nil { return false, nil }
+    _, ok := f.Instances[project][name]
+    return ok, nil
+}
+
+func (f *FakeClient) StopInstance(project, name string, force bool) error {
+    // No-op in fake
+    return nil
+}
+
+func (f *FakeClient) DeleteInstance(project, name string) error {
+    if f.Instances[project] == nil { return &NotFoundError{Resource: "instance", Name: name} }
+    if _, ok := f.Instances[project][name]; !ok { return &NotFoundError{Resource: "instance", Name: name} }
+    delete(f.Instances[project], name)
+    return nil
+}
+
 type ConflictError struct{ Resource, Name string }
 func (e *ConflictError) Error() string { return e.Resource + " conflict: " + e.Name }
 
