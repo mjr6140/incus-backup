@@ -79,6 +79,7 @@ CLI invariants (see REQUIREMENTS.md):
 - Commit subject ≤72 chars; include a short, imperative description.
 - PRs must include: what/why, how tested, screenshots/logs if applicable, and linked issues.
 - Keep PRs focused; prefer incremental, reviewable changes.
+- Keep `docs/ROADMAP.md` up to date in each PR by marking completed and in-progress items to reflect the current state.
 
 ## Security & Configuration Tips
 - Do not commit secrets; use `.env` (gitignored) and provide `.env.example`.

@@ -18,11 +18,11 @@ Legend: [ ] Todo · [~] In progress · [x] Done
   - Connect via UNIX socket, log version, create/delete temporary project.
   - File: `tests/integration/probe_incus_test.go`
 
-- [~] CLI skeleton + version
+- [x] CLI skeleton + version
   - Cobra root command, `--version`, logging init scaffold.
   - Tests: unit tests for command wiring; help text snapshot.
 
-- [ ] Target URI parser + validation
+- [~] Target URI parser + validation
   - Parse canonical backend URIs (e.g., `dir:/path`).
   - Backend registry interface; helpful errors.
   - Tests: table-driven unit; reject invalid URIs.
@@ -79,4 +79,3 @@ Legend: [ ] Todo · [~] In progress · [x] Done
 
 - Requirements/spec: `REQUIREMENTS.md`
 - Agent/development guidelines: `AGENTS.md`
-
