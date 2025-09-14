@@ -22,17 +22,17 @@ Legend: [ ] Todo · [~] In progress · [x] Done
   - Cobra root command, `--version`, logging init scaffold.
   - Tests: unit tests for command wiring; help text snapshot.
 
-- [~] Target URI parser + validation
+- [x] Target URI parser + validation
   - Parse canonical backend URIs (e.g., `dir:/path`).
   - Backend registry interface; helpful errors.
   - Tests: table-driven unit; reject invalid URIs.
 
-- [ ] Directory backend layout + list
+- [x] Directory backend layout + list
   - Manifest schemas; read-only `list` across types.
   - Output formats: table/json/yaml.
   - Tests: unit with temp dirs; golden manifests; list formatting.
 
-- [ ] Safety utilities
+- [~] Safety utilities
   - `--dry-run`, `--yes`/`-y`, `--force`; interactive prompt helper.
   - Tests: unit for plan decisions; prompt behavior mocked.
 
