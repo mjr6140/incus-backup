@@ -78,12 +78,6 @@ RUN_FLAGS=(
 echo "[itest] Starting container $CONTAINER_NAME from $IMAGE_TAG"
 "$runtime" run "${RUN_FLAGS[@]}" "$IMAGE_TAG"
 
-echo "[itest] Waiting for systemd to come up inside the container"
-"$runtime" exec "$CONTAINER_NAME" bash -lc 'timeout 60s bash -c "until systemctl is-system-running --wait >/dev/null 2>&1; do sleep 1; done" || true'
-
-echo "[itest] Ensuring Incus service is running and initialized"
-"$runtime" exec "$CONTAINER_NAME" bash -lc 'systemctl enable --now incus.service >/dev/null 2>&1 || true; incus admin init --minimal || true'
-
 echo "[itest] Running integration tests"
-"$runtime" exec -e INCUS_TESTS=1 "$CONTAINER_NAME" bash -lc "run-tests.sh"
-
+"$runtime" exec -e INCUS_TESTS=1 -e WORKDIR=/workspace "$CONTAINER_NAME" bash -lc \
+  "/workspace/scripts/images/incus-itest/run-tests.sh"
