@@ -37,7 +37,7 @@ func newBackupConfigCmd(stdout, stderr io.Writer) *cobra.Command {
                 if err != nil {
                     return err
                 }
-                _, err = cfg.BackupProjects(client, tgt.DirPath, time.Now())
+                _, err = cfg.BackupAll(client, tgt.DirPath, time.Now())
                 return err
             default:
                 return fmt.Errorf("unsupported backend: %s", tgt.Scheme)
@@ -47,4 +47,3 @@ func newBackupConfigCmd(stdout, stderr io.Writer) *cobra.Command {
     cmd.Flags().String("target", "", "Backend target URI (e.g., dir:/path)")
     return cmd
 }
-

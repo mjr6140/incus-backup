@@ -6,6 +6,14 @@ type Project struct {
     Config map[string]string
 }
 
+// Profile mirrors the important fields of an Incus profile.
+type Profile struct {
+    Name        string
+    Description string
+    Config      map[string]string
+    Devices     map[string]map[string]string
+}
+
 // ServerInfo exposes key server metadata we care about.
 type ServerInfo struct {
     ServerVersion string
@@ -22,4 +30,7 @@ type Client interface {
     CreateProject(name string, config map[string]string) error
     DeleteProject(name string) error
     UpdateProject(name string, config map[string]string) error
+
+    // Profiles
+    ListProfiles() ([]Profile, error)
 }

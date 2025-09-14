@@ -6,10 +6,11 @@ import "sort"
 type FakeClient struct {
     ServerVersionStr string
     ProjectsMap      map[string]Project
+    ProfilesMap      map[string]Profile
 }
 
 func NewFake() *FakeClient {
-    return &FakeClient{ProjectsMap: map[string]Project{}}
+    return &FakeClient{ProjectsMap: map[string]Project{}, ProfilesMap: map[string]Profile{}}
 }
 
 func (f *FakeClient) Server() (ServerInfo, error) {
@@ -59,6 +60,15 @@ func (f *FakeClient) UpdateProject(name string, config map[string]string) error 
     p.Config = copied
     f.ProjectsMap[name] = p
     return nil
+}
+
+func (f *FakeClient) ListProfiles() ([]Profile, error) {
+    out := make([]Profile, 0, len(f.ProfilesMap))
+    for _, p := range f.ProfilesMap {
+        out = append(out, p)
+    }
+    sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+    return out, nil
 }
 
 type ConflictError struct{ Resource, Name string }

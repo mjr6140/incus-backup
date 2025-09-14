@@ -60,3 +60,31 @@ func (r *RealClient) UpdateProject(name string, config map[string]string) error 
     put := api.ProjectPut{Config: config}
     return r.c.UpdateProject(name, put, etag)
 }
+
+func (r *RealClient) ListProfiles() ([]Profile, error) {
+    profs, err := r.c.GetProfiles()
+    if err != nil {
+        return nil, err
+    }
+    out := make([]Profile, 0, len(profs))
+    for _, p := range profs {
+        out = append(out, Profile{
+            Name:        p.Name,
+            Description: p.Description,
+            Config:      p.Config,
+            Devices:     convertDevices(p.Devices),
+        })
+    }
+    return out, nil
+}
+
+func convertDevices(in map[string]map[string]string) map[string]map[string]string {
+    if in == nil { return nil }
+    out := make(map[string]map[string]string, len(in))
+    for k, v := range in {
+        inner := make(map[string]string, len(v))
+        for k2, v2 := range v { inner[k2] = v2 }
+        out[k] = inner
+    }
+    return out
+}
