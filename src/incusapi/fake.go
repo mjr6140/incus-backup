@@ -1,6 +1,10 @@
 package incusapi
 
-import "sort"
+import (
+    "bytes"
+    "io"
+    "sort"
+)
 
 // FakeClient is an in-memory implementation for unit tests.
 type FakeClient struct {
@@ -9,6 +13,7 @@ type FakeClient struct {
     ProfilesMap      map[string]Profile
     NetworksMap      map[string]Network
     StoragePoolsMap  map[string]StoragePool
+    Instances        map[string]map[string][]byte // project -> name -> export bytes
 }
 
 func NewFake() *FakeClient {
@@ -17,6 +22,7 @@ func NewFake() *FakeClient {
         ProfilesMap:     map[string]Profile{},
         NetworksMap:     map[string]Network{},
         StoragePoolsMap: map[string]StoragePool{},
+        Instances:       map[string]map[string][]byte{},
     }
 }
 
@@ -141,6 +147,39 @@ func (f *FakeClient) DeleteStoragePool(name string) error {
         return &NotFoundError{Resource: "storage_pool", Name: name}
     }
     delete(f.StoragePoolsMap, name)
+    return nil
+}
+
+func (f *FakeClient) ListInstances(project string) ([]Instance, error) {
+    var out []Instance
+    if m, ok := f.Instances[project]; ok {
+        for name := range m {
+            out = append(out, Instance{Project: project, Name: name})
+        }
+    }
+    sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+    return out, nil
+}
+
+func (f *FakeClient) ExportInstance(project, name string, optimized bool, snapshot string) (io.ReadCloser, error) {
+    if f.Instances[project] == nil {
+        return io.NopCloser(bytes.NewReader([]byte(""))), nil
+    }
+    data := f.Instances[project][name]
+    if data == nil {
+        // Use default content
+        data = []byte("FAKE-EXPORT")
+    }
+    return io.NopCloser(bytes.NewReader(data)), nil
+}
+
+func (f *FakeClient) ImportInstance(project, targetName string, r io.Reader) error {
+    if f.Instances[project] == nil { f.Instances[project] = map[string][]byte{} }
+    b, err := io.ReadAll(r)
+    if err != nil { return err }
+    name := targetName
+    if name == "" { name = "restored" }
+    f.Instances[project][name] = b
     return nil
 }
 

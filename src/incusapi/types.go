@@ -1,5 +1,6 @@
 package incusapi
 
+import "io"
 // Project models a minimal Incus project for our purposes.
 type Project struct {
     Name   string
@@ -29,6 +30,13 @@ type StoragePool struct {
     Driver      string
     Description string
     Config      map[string]string
+}
+
+// Instance captures minimal instance info.
+type Instance struct {
+    Project string
+    Name    string
+    Type    string // container|virtual-machine
 }
 
 // ServerInfo exposes key server metadata we care about.
@@ -62,4 +70,12 @@ type Client interface {
     CreateStoragePool(p StoragePool) error
     UpdateStoragePool(p StoragePool) error
     DeleteStoragePool(name string) error
+
+    // Instances
+    ListInstances(project string) ([]Instance, error)
+    // ExportInstance returns a tar stream of the instance export. If snapshot is non-empty,
+    // it should export from that snapshot. If optimized is true, use backend-optimized export.
+    ExportInstance(project, name string, optimized bool, snapshot string) (io.ReadCloser, error)
+    // ImportInstance creates/restores an instance from the given tar stream with optional target name.
+    ImportInstance(project, targetName string, r io.Reader) error
 }

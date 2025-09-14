@@ -1,6 +1,8 @@
 package incusapi
 
 import (
+    "errors"
+    "io"
     incuscli "github.com/lxc/incus/client"
     "github.com/lxc/incus/shared/api"
 )
@@ -168,4 +170,17 @@ func (r *RealClient) UpdateStoragePool(p StoragePool) error {
 
 func (r *RealClient) DeleteStoragePool(name string) error {
     return r.c.DeleteStoragePool(name)
+}
+
+func (r *RealClient) ListInstances(project string) ([]Instance, error) {
+    // TODO: implement real call with project change when wiring full support.
+    return nil, errors.New("ListInstances not implemented yet")
+}
+
+func (r *RealClient) ExportInstance(project, name string, optimized bool, snapshot string) (io.ReadCloser, error) {
+    return nil, errors.New("ExportInstance not implemented yet")
+}
+
+func (r *RealClient) ImportInstance(project, targetName string, rstream io.Reader) error {
+    return errors.New("ImportInstance not implemented yet")
 }
