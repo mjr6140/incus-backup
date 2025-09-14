@@ -101,9 +101,67 @@ func newRestoreConfigCmd(stdout, stderr io.Writer) *cobra.Command {
             if !ok { return nil }
             // Apply in order: storage pools, networks, projects
             // Only delete networks/pools when --force is set.
-            if sum, err := cfg.ApplyStoragePoolsPlan(client, splan, opts.Force); err != nil { return err } else { fmt.Fprintln(stdout, sum) }
-            if sum, err := cfg.ApplyNetworksPlan(client, nplan, opts.Force); err != nil { return err } else { fmt.Fprintln(stdout, sum) }
-            if sum, err := cfg.ApplyProjectsPlan(client, plan); err != nil { return err } else { fmt.Fprintln(stdout, sum) }
+            // Print per-resource progress lines for consistency.
+            // Storage pools
+            spCreated, spUpdated, spDeleted := 0, 0, 0
+            for _, p := range splan.ToCreate {
+                fmt.Fprintf(stdout, "[storage] create %s\n", p.Name)
+                if err := client.CreateStoragePool(p); err != nil { return err }
+                spCreated++
+            }
+            for _, u := range splan.ToUpdate {
+                fmt.Fprintf(stdout, "[storage] update %s\n", u.Name)
+                if err := client.UpdateStoragePool(incusapi.StoragePool{Name: u.Name, Config: u.DesiredConf}); err != nil { return err }
+                spUpdated++
+            }
+            if opts.Force {
+                for _, p := range splan.ToDelete {
+                    fmt.Fprintf(stdout, "[storage] delete %s\n", p.Name)
+                    if err := client.DeleteStoragePool(p.Name); err != nil { return err }
+                    spDeleted++
+                }
+            }
+            fmt.Fprintf(stdout, "storage_pools: created=%d updated=%d deleted=%d\n", spCreated, spUpdated, spDeleted)
+
+            // Networks
+            netCreated, netUpdated, netDeleted := 0, 0, 0
+            for _, n := range nplan.ToCreate {
+                fmt.Fprintf(stdout, "[networks] create %s\n", n.Name)
+                if err := client.CreateNetwork(n); err != nil { return err }
+                netCreated++
+            }
+            for _, u := range nplan.ToUpdate {
+                fmt.Fprintf(stdout, "[networks] update %s\n", u.Name)
+                if err := client.UpdateNetwork(incusapi.Network{Name: u.Name, Config: u.DesiredConf}); err != nil { return err }
+                netUpdated++
+            }
+            if opts.Force {
+                for _, n := range nplan.ToDelete {
+                    fmt.Fprintf(stdout, "[networks] delete %s\n", n.Name)
+                    if err := client.DeleteNetwork(n.Name); err != nil { return err }
+                    netDeleted++
+                }
+            }
+            fmt.Fprintf(stdout, "networks: created=%d updated=%d deleted=%d\n", netCreated, netUpdated, netDeleted)
+
+            // Projects
+            prCreated, prUpdated, prDeleted := 0, 0, 0
+            for _, p := range plan.ToCreate {
+                fmt.Fprintf(stdout, "[projects] create %s\n", p.Name)
+                if err := client.CreateProject(p.Name, p.Config); err != nil { return err }
+                prCreated++
+            }
+            for _, u := range plan.ToUpdate {
+                fmt.Fprintf(stdout, "[projects] update %s\n", u.Name)
+                if err := client.UpdateProject(u.Name, u.Desired); err != nil { return err }
+                prUpdated++
+            }
+            for _, p := range plan.ToDelete {
+                fmt.Fprintf(stdout, "[projects] delete %s\n", p.Name)
+                if err := client.DeleteProject(p.Name); err != nil { return err }
+                prDeleted++
+            }
+            fmt.Fprintf(stdout, "projects: created=%d updated=%d deleted=%d\n", prCreated, prUpdated, prDeleted)
             return nil
         },
     }
