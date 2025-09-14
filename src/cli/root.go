@@ -24,6 +24,7 @@ func NewRootCmd(stdout, stderr io.Writer) *cobra.Command {
 
     // Subcommands
     cmd.AddCommand(newVersionCmd(stdout))
+    cmd.AddCommand(newListCmd(stdout, stderr))
 
     return cmd
 }
@@ -39,4 +40,3 @@ func Execute() int {
     }
     return 0
 }
-
