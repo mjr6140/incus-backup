@@ -2,7 +2,10 @@ module incus-backup
 
 go 1.22
 
-require github.com/lxc/incus v0.7.0
+require (
+	github.com/lxc/incus v0.7.0
+	github.com/spf13/cobra v1.8.0
+)
 
 require (
 	github.com/golang/protobuf v1.5.4 // indirect
@@ -10,10 +13,12 @@ require (
 	github.com/gorilla/schema v1.2.1 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gorilla/websocket v1.5.1 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/muhlemmer/gu v0.3.1 // indirect
 	github.com/pkg/sftp v1.13.6 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/zitadel/oidc/v2 v2.12.0 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
 	golang.org/x/net v0.22.0 // indirect
