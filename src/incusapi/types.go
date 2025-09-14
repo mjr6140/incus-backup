@@ -39,6 +39,14 @@ type Instance struct {
     Type    string // container|virtual-machine
 }
 
+// Volume captures minimal custom storage volume info.
+type Volume struct {
+    Project     string
+    Pool        string
+    Name        string
+    ContentType string // filesystem|block
+}
+
 // ServerInfo exposes key server metadata we care about.
 type ServerInfo struct {
     ServerVersion string
@@ -87,4 +95,13 @@ type Client interface {
     // Snapshot lifecycle
     CreateInstanceSnapshot(project, name, snapshot string) error
     DeleteInstanceSnapshot(project, name, snapshot string) error
+
+    // Volumes (custom)
+    ListCustomVolumes(project string) ([]Volume, error)
+    VolumeExists(project, pool, name string) (bool, error)
+    CreateVolumeSnapshot(project, pool, name, snapshot string) error
+    DeleteVolumeSnapshot(project, pool, name, snapshot string) error
+    ExportVolume(project, pool, name string, optimized bool, snapshot string, progress io.Writer) (io.ReadCloser, error)
+    ImportVolume(project, poolTarget, nameTarget string, r io.Reader, progress io.Writer) error
+    DeleteVolume(project, pool, name string) error
 }

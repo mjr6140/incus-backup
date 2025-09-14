@@ -21,6 +21,7 @@ func newRestoreCmd(stdout, stderr io.Writer) *cobra.Command {
     cmd := &cobra.Command{Use: "restore", Short: "Restore from backups"}
     cmd.AddCommand(newRestoreConfigCmd(stdout, stderr))
     cmd.AddCommand(newRestoreInstanceCmd(stdout, stderr))
+    cmd.AddCommand(newRestoreVolumeCmd(stdout, stderr))
     return cmd
 }
 

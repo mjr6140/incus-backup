@@ -349,3 +349,135 @@ func (r *RealClient) DeleteInstanceSnapshot(project, name, snapshot string) erro
     if err != nil { return err }
     return op.Wait()
 }
+
+// Volumes
+func (r *RealClient) ListCustomVolumes(project string) ([]Volume, error) {
+    srv := r.c
+    if project != "" && project != "default" { srv = srv.UseProject(project) }
+    pools, err := srv.GetStoragePools()
+    if err != nil { return nil, err }
+    var out []Volume
+    for _, p := range pools {
+        vols, err := srv.GetStoragePoolVolumes(p.Name)
+        if err != nil { return nil, err }
+        for _, v := range vols {
+            if v.Type != "custom" { continue }
+            out = append(out, Volume{Project: project, Pool: p.Name, Name: v.Name, ContentType: v.ContentType})
+        }
+    }
+    return out, nil
+}
+
+func (r *RealClient) VolumeExists(project, pool, name string) (bool, error) {
+    srv := r.c
+    if project != "" && project != "default" { srv = srv.UseProject(project) }
+    _, _, err := srv.GetStoragePoolVolume(pool, "custom", name)
+    if err != nil {
+        if strings.Contains(err.Error(), "not found") { return false, nil }
+        return false, err
+    }
+    return true, nil
+}
+
+func (r *RealClient) CreateVolumeSnapshot(project, pool, name, snapshot string) error {
+    srv := r.c
+    if project != "" && project != "default" { srv = srv.UseProject(project) }
+    req := api.StorageVolumeSnapshotsPost{Name: snapshot}
+    op, err := srv.CreateStoragePoolVolumeSnapshot(pool, "custom", name, req)
+    if err != nil { return err }
+    return op.Wait()
+}
+
+func (r *RealClient) DeleteVolumeSnapshot(project, pool, name, snapshot string) error {
+    srv := r.c
+    if project != "" && project != "default" { srv = srv.UseProject(project) }
+    op, err := srv.DeleteStoragePoolVolumeSnapshot(pool, "custom", name, snapshot)
+    if err != nil { return err }
+    return op.Wait()
+}
+
+func (r *RealClient) ExportVolume(project, pool, name string, optimized bool, snapshot string, progressOut io.Writer) (io.ReadCloser, error) {
+    srv := r.c
+    if project != "" && project != "default" { srv = srv.UseProject(project) }
+    req := api.StoragePoolVolumeBackupsPost{OptimizedStorage: optimized, VolumeOnly: false}
+    // Create backup
+    op, err := srv.CreateStoragePoolVolumeBackup(pool, name, req)
+    if err != nil { return nil, err }
+    if progressOut != nil {
+        var last string
+        ticker := time.NewTicker(1 * time.Second)
+        defer ticker.Stop()
+        for {
+            _ = op.Refresh()
+            st := op.Get().Status
+            if st != "" && st != last {
+                fmt.Fprintf(progressOut, "\r[server] %s", st)
+                last = st
+            }
+            if err := op.Wait(); err == nil {
+                _ = op.Refresh()
+                st2 := op.Get().Status
+                if st2 != "" && st2 != last { fmt.Fprintf(progressOut, "\r[server] %s", st2) }
+                fmt.Fprint(progressOut, "\n")
+                break
+            }
+            <-ticker.C
+        }
+    } else {
+        if err := op.Wait(); err != nil { return nil, err }
+    }
+    // Determine backup name from operation resources
+    resources := op.Get().Resources
+    if len(resources["backups"]) == 0 {
+        return nil, errors.New("no volume backup resource returned")
+    }
+    backupURL := resources["backups"][0]
+    seg := backupURL[strings.LastIndex(backupURL, "/")+1:]
+    // temp file
+    f, err := os.CreateTemp("", "incus-vol-export-*.tar")
+    if err != nil { return nil, err }
+    // Download with progress
+    reqFile := incuscli.BackupFileRequest{BackupFile: f}
+    if progressOut != nil {
+        reqFile.ProgressHandler = func(pd ioprogress.ProgressData) { fmt.Fprintf(progressOut, "\r[download] %s", pd.Text) }
+    }
+    if _, err := srv.GetStoragePoolVolumeBackupFile(pool, name, seg, &reqFile); err != nil {
+        _ = f.Close(); _ = os.Remove(f.Name())
+        return nil, err
+    }
+    if progressOut != nil { fmt.Fprint(progressOut, "\n") }
+    if _, err := f.Seek(0, io.SeekStart); err != nil { _ = f.Close(); _ = os.Remove(f.Name()); return nil, err }
+    // Delete server-side backup (best-effort)
+    go func() { _op, _ := srv.DeleteStoragePoolVolumeBackup(pool, name, seg); if _op != nil { _ = _op.Wait() } }()
+    return &tempFileReadCloser{File: f}, nil
+}
+
+func (r *RealClient) ImportVolume(project, poolTarget, nameTarget string, reader io.Reader, progressOut io.Writer) error {
+    srv := r.c
+    if project != "" && project != "default" { srv = srv.UseProject(project) }
+    args := incuscli.StoragePoolVolumeBackupArgs{BackupFile: reader, Name: nameTarget}
+    op, err := srv.CreateStoragePoolVolumeFromBackup(poolTarget, args)
+    if err != nil { return err }
+    if progressOut != nil {
+        last := ""
+        ticker := time.NewTicker(1 * time.Second)
+        defer ticker.Stop()
+        for {
+            _ = op.Refresh()
+            st := op.Get().Status
+            if st != "" && st != last { fmt.Fprintf(progressOut, "\r[server] %s", st); last = st }
+            if err := op.Wait(); err == nil { break }
+            <-ticker.C
+        }
+        fmt.Fprint(progressOut, "\n")
+    } else {
+        if err := op.Wait(); err != nil { return err }
+    }
+    return nil
+}
+
+func (r *RealClient) DeleteVolume(project, pool, name string) error {
+    srv := r.c
+    if project != "" && project != "default" { srv = srv.UseProject(project) }
+    return srv.DeleteStoragePoolVolume(pool, "custom", name)
+}

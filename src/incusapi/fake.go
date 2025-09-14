@@ -15,6 +15,7 @@ type FakeClient struct {
     StoragePoolsMap  map[string]StoragePool
     Instances        map[string]map[string][]byte // project -> name -> export bytes
     Snapshots        map[string]map[string]struct{} // key: project/name@snap -> exists
+    Volumes          map[string]map[string]map[string][]byte // project -> pool -> name -> export bytes
 }
 
 func NewFake() *FakeClient {
@@ -25,6 +26,7 @@ func NewFake() *FakeClient {
         StoragePoolsMap: map[string]StoragePool{},
         Instances:       map[string]map[string][]byte{},
         Snapshots:       map[string]map[string]struct{}{},
+        Volumes:         map[string]map[string]map[string][]byte{},
     }
 }
 
@@ -213,6 +215,50 @@ func (f *FakeClient) CreateInstanceSnapshot(project, name, snapshot string) erro
 func (f *FakeClient) DeleteInstanceSnapshot(project, name, snapshot string) error {
     key := project + "/" + name
     if f.Snapshots[key] != nil { delete(f.Snapshots[key], snapshot) }
+    return nil
+}
+
+// Volumes
+func (f *FakeClient) ListCustomVolumes(project string) ([]Volume, error) {
+    var out []Volume
+    if f.Volumes[project] != nil {
+        for pool, m := range f.Volumes[project] {
+            for name := range m { out = append(out, Volume{Project: project, Pool: pool, Name: name, ContentType: "filesystem"}) }
+        }
+    }
+    sort.Slice(out, func(i, j int) bool { if out[i].Pool==out[j].Pool { return out[i].Name<out[j].Name }; return out[i].Pool<out[j].Pool })
+    return out, nil
+}
+
+func (f *FakeClient) VolumeExists(project, pool, name string) (bool, error) {
+    if f.Volumes[project] == nil { return false, nil }
+    if f.Volumes[project][pool] == nil { return false, nil }
+    _, ok := f.Volumes[project][pool][name]
+    return ok, nil
+}
+
+func (f *FakeClient) CreateVolumeSnapshot(project, pool, name, snapshot string) error { return nil }
+func (f *FakeClient) DeleteVolumeSnapshot(project, pool, name, snapshot string) error { return nil }
+
+func (f *FakeClient) ExportVolume(project, pool, name string, optimized bool, snapshot string, _ io.Writer) (io.ReadCloser, error) {
+    if f.Volumes[project]==nil || f.Volumes[project][pool]==nil || f.Volumes[project][pool][name]==nil {
+        return io.NopCloser(bytes.NewReader([]byte(""))), nil
+    }
+    return io.NopCloser(bytes.NewReader(f.Volumes[project][pool][name])), nil
+}
+
+func (f *FakeClient) ImportVolume(project, poolTarget, nameTarget string, r io.Reader, _ io.Writer) error {
+    if f.Volumes[project] == nil { f.Volumes[project] = map[string]map[string][]byte{} }
+    if f.Volumes[project][poolTarget] == nil { f.Volumes[project][poolTarget] = map[string][]byte{} }
+    b, err := io.ReadAll(r)
+    if err != nil { return err }
+    f.Volumes[project][poolTarget][nameTarget] = b
+    return nil
+}
+
+func (f *FakeClient) DeleteVolume(project, pool, name string) error {
+    if f.Volumes[project]==nil || f.Volumes[project][pool]==nil { return &NotFoundError{Resource: "volume", Name: name} }
+    delete(f.Volumes[project][pool], name)
     return nil
 }
 
