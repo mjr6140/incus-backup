@@ -5,6 +5,7 @@ import (
     "io"
     "os"
     "strings"
+    "time"
     incuscli "github.com/lxc/incus/client"
     "github.com/lxc/incus/shared/api"
     "fmt"
@@ -233,16 +234,27 @@ func (r *RealClient) ImportInstance(project, targetName string, rstream io.Reade
     op, err := srv.CreateInstanceFromBackup(args)
     if err != nil { return err }
     if progressOut != nil {
-        _, _ = op.AddHandler(func(o api.Operation) {
-            // Print basic server-side status updates.
-            // Avoid excessive chatter by printing only when status changes.
-            fmt.Fprintf(progressOut, "\r[server] %s", o.Status)
-        })
+        // Poll the operation status periodically to surface "Running" etc.
+        done := make(chan struct{})
+        go func() {
+            last := ""
+            for {
+                select {
+                case <-done:
+                    return
+                case <-time.After(1 * time.Second):
+                    _ = op.Refresh()
+                    st := op.Get().Status
+                    if st != last && st != "" {
+                        fmt.Fprintf(progressOut, "\r[server] %s", st)
+                        last = st
+                    }
+                }
+            }
+        }()
+        defer func() { close(done); fmt.Fprint(progressOut, "\n") }()
     }
     err = op.Wait()
-    if progressOut != nil {
-        fmt.Fprint(progressOut, "\n")
-    }
     return err
 }
 
