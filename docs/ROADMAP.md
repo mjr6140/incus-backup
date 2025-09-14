@@ -43,7 +43,7 @@ Legend: [ ] Todo · [~] In progress · [x] Done
 
 - [~] Config backup + restore preview
   - `backup config` writes `config/` JSONs + manifest/checksums. (projects implemented)
-  - `restore config` previews changes; `--apply` gated and confirmed. (preview for projects next)
+  - `restore config` previews changes; `--apply` gated and confirmed. (projects apply implemented)
   - Tests: unit (fakes) and integration (temp project export + preview).
 
 - [ ] Instance backup (snapshot, portable)
