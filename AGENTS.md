@@ -38,6 +38,9 @@ Environment variables:
 - `KEEP_CONTAINER=1` — leave the container running for debugging.
 - `IMAGE_TAG=incus-itest:latest` — override image tag.
 - `CONTAINER_NAME=incus-itest-run` — override container name.
+- Caching: module and build caches persist under the workspace to avoid re-downloads
+  on each run (`.cache/gomod`, `.cache/gocache`). Override with `GOMODCACHE` and
+  `GOCACHE` if needed.
 
 ### Go Stack Notes
 - Go 1.22+, Cobra for CLI, Viper for config, slog for logging.
