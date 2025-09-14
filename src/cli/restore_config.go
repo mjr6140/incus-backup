@@ -86,6 +86,10 @@ func newRestoreConfigCmd(stdout, stderr io.Writer) *cobra.Command {
                 renderStoragePoolsPlan(stdout, splan)
                 return nil
             }
+            // Always echo a table-style preview before confirmation
+            renderProjectsPlan(stdout, plan)
+            renderNetworksPlan(stdout, nplan)
+            renderStoragePoolsPlan(stdout, splan)
             // Prompt once with summary unless --yes
             var buf strings.Builder
             buf.WriteString("Apply config changes? (networks/storage pools may disrupt running workloads)\n")
