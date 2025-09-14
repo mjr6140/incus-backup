@@ -36,24 +36,26 @@ Legend: [ ] Todo · [~] In progress · [x] Done
   - `--dry-run`, `--yes`/`-y`, `--force`; interactive prompt helper.
   - Tests: unit for plan decisions; prompt behavior mocked.
 
-- [ ] Incus wrapper interfaces + fake
-  - Narrow interfaces over `github.com/lxc/incus/client` for instances, volumes,
-    images, and config; concrete impl + in-memory fake.
-  - Tests: unit verifying wrapper contracts (no real Incus).
+- [x] Incus wrapper interfaces + fake
+  - Narrow interfaces over `github.com/lxc/incus/client` for projects, profiles,
+    networks, storage pools, and instances; real + in-memory fake.
+  - Tests: unit verifying wrappers using fakes; probe integration tests.
 
-- [~] Config backup + restore preview
-  - `backup config` writes `config/` JSONs + manifest/checksums. (projects implemented)
-  - `restore config` previews changes; `--apply` gated and confirmed. (projects apply implemented)
-  - Tests: unit (fakes) and integration (temp project export + preview).
+- [x] Config backup + restore preview
+  - `backup config` writes `config/` JSONs + manifest/checksums. (projects, profiles, networks, storage pools)
+  - `restore config` previews and applies (projects, networks, storage pools); deletions for networks/pools require `--force`.
+  - Tests: unit for planners/apply; integration for backup/preview and apply.
 
-- [ ] Instance backup (snapshot, portable)
-  - `backup instances [NAME ...]` with snapshot-by-default; `--optimized` flag.
-  - Tests: unit for options/manifest; integration with minimal Alpine instance.
+- [~] Instance backup (portable, snapshot-by-default)
+  - `backup instances [NAME ...]` implemented using Incus backup API; `--optimized` flag.
+  - Snapshot-by-default behavior planned; current export uses server backup (no temp snapshot yet).
+  - Tests: unit for manifest; integration with Alpine instance.
 
-- [ ] Instance restore (rename/replace, mapping)
-  - `restore instance NAME [--version TS] [--target-name NEW]` and
-    `--replace|--skip-existing`, `--pool-map`/`--network-map`/`--project-map`/`--profile-map`.
-  - Tests: unit for conflict/mapping logic; integration: restore to new name and with replace.
+- [x] Instance restore (rename/replace)
+  - `restore instance NAME [--version TS] [--target-name NEW]` with `--replace|--skip-existing`.
+  - Table-style preview printed in dry-run and before confirmation.
+  - Progress during import plus server-side status polling (Running → Success).
+  - Tests: integration for standard restore, --replace, --target-name, --skip-existing.
 
 - [ ] Volume backup/restore (project-scoped)
   - `backup volumes` and `restore volume` with snapshot-by-default.
