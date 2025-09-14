@@ -123,3 +123,49 @@ func (r *RealClient) ListStoragePools() ([]StoragePool, error) {
     }
     return out, nil
 }
+
+func (r *RealClient) CreateNetwork(n Network) error {
+    req := api.NetworksPost{
+        Name: n.Name,
+        Type: n.Type,
+        NetworkPut: api.NetworkPut{
+            Description: n.Description,
+            Config:      n.Config,
+        },
+    }
+    return r.c.CreateNetwork(req)
+}
+
+func (r *RealClient) UpdateNetwork(n Network) error {
+    _, etag, err := r.c.GetNetwork(n.Name)
+    if err != nil { return err }
+    put := api.NetworkPut{Description: n.Description, Config: n.Config}
+    return r.c.UpdateNetwork(n.Name, put, etag)
+}
+
+func (r *RealClient) DeleteNetwork(name string) error {
+    return r.c.DeleteNetwork(name)
+}
+
+func (r *RealClient) CreateStoragePool(p StoragePool) error {
+    req := api.StoragePoolsPost{
+        Name:   p.Name,
+        Driver: p.Driver,
+        StoragePoolPut: api.StoragePoolPut{
+            Description: p.Description,
+            Config:      p.Config,
+        },
+    }
+    return r.c.CreateStoragePool(req)
+}
+
+func (r *RealClient) UpdateStoragePool(p StoragePool) error {
+    _, etag, err := r.c.GetStoragePool(p.Name)
+    if err != nil { return err }
+    put := api.StoragePoolPut{Description: p.Description, Config: p.Config}
+    return r.c.UpdateStoragePool(p.Name, put, etag)
+}
+
+func (r *RealClient) DeleteStoragePool(name string) error {
+    return r.c.DeleteStoragePool(name)
+}

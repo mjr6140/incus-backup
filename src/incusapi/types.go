@@ -53,7 +53,13 @@ type Client interface {
 
     // Networks
     ListNetworks() ([]Network, error)
+    CreateNetwork(n Network) error
+    UpdateNetwork(n Network) error
+    DeleteNetwork(name string) error
 
     // Storage pools
     ListStoragePools() ([]StoragePool, error)
+    CreateStoragePool(p StoragePool) error
+    UpdateStoragePool(p StoragePool) error
+    DeleteStoragePool(name string) error
 }

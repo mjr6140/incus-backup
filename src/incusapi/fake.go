@@ -96,6 +96,54 @@ func (f *FakeClient) ListStoragePools() ([]StoragePool, error) {
     return out, nil
 }
 
+func (f *FakeClient) CreateNetwork(n Network) error {
+    if _, ok := f.NetworksMap[n.Name]; ok {
+        return &ConflictError{Resource: "network", Name: n.Name}
+    }
+    f.NetworksMap[n.Name] = n
+    return nil
+}
+
+func (f *FakeClient) UpdateNetwork(n Network) error {
+    if _, ok := f.NetworksMap[n.Name]; !ok {
+        return &NotFoundError{Resource: "network", Name: n.Name}
+    }
+    f.NetworksMap[n.Name] = n
+    return nil
+}
+
+func (f *FakeClient) DeleteNetwork(name string) error {
+    if _, ok := f.NetworksMap[name]; !ok {
+        return &NotFoundError{Resource: "network", Name: name}
+    }
+    delete(f.NetworksMap, name)
+    return nil
+}
+
+func (f *FakeClient) CreateStoragePool(p StoragePool) error {
+    if _, ok := f.StoragePoolsMap[p.Name]; ok {
+        return &ConflictError{Resource: "storage_pool", Name: p.Name}
+    }
+    f.StoragePoolsMap[p.Name] = p
+    return nil
+}
+
+func (f *FakeClient) UpdateStoragePool(p StoragePool) error {
+    if _, ok := f.StoragePoolsMap[p.Name]; !ok {
+        return &NotFoundError{Resource: "storage_pool", Name: p.Name}
+    }
+    f.StoragePoolsMap[p.Name] = p
+    return nil
+}
+
+func (f *FakeClient) DeleteStoragePool(name string) error {
+    if _, ok := f.StoragePoolsMap[name]; !ok {
+        return &NotFoundError{Resource: "storage_pool", Name: name}
+    }
+    delete(f.StoragePoolsMap, name)
+    return nil
+}
+
 type ConflictError struct{ Resource, Name string }
 func (e *ConflictError) Error() string { return e.Resource + " conflict: " + e.Name }
 
