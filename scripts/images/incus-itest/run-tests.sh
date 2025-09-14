@@ -31,10 +31,6 @@ echo "[run-tests] Incus version: $(incus version || true)"
 
 cd "$WORKDIR"
 
-echo "[run-tests] Ensuring Go module deps for integration tests..."
-go get github.com/lxc/incus@latest >/dev/null 2>&1 || true
-go mod tidy >/dev/null 2>&1 || true
-
 echo "[run-tests] Running tests in $WORKDIR"
 if [[ "$INTEGRATION" == "1" ]]; then
   INCUS_TESTS=1 go test -v -tags=integration "$PKGS"
