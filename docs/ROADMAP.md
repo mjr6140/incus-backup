@@ -41,9 +41,9 @@ Legend: [ ] Todo · [~] In progress · [x] Done
     images, and config; concrete impl + in-memory fake.
   - Tests: unit verifying wrapper contracts (no real Incus).
 
-- [ ] Config backup + restore preview
-  - `backup config` writes `config/` JSONs + manifest/checksums.
-  - `restore config` previews changes; `--apply` gated and confirmed.
+- [~] Config backup + restore preview
+  - `backup config` writes `config/` JSONs + manifest/checksums. (projects implemented)
+  - `restore config` previews changes; `--apply` gated and confirmed. (preview for projects next)
   - Tests: unit (fakes) and integration (temp project export + preview).
 
 - [ ] Instance backup (snapshot, portable)
