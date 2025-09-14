@@ -233,11 +233,12 @@ func (r *RealClient) ImportInstance(project, targetName string, rstream io.Reade
     args := incuscli.InstanceBackupArgs{BackupFile: rstream, Name: targetName}
     op, err := srv.CreateInstanceFromBackup(args)
     if err != nil { return err }
+    var lastStatus string
+    var done chan struct{}
     if progressOut != nil {
         // Poll the operation status periodically to surface "Running" etc.
-        done := make(chan struct{})
+        done = make(chan struct{})
         go func() {
-            last := ""
             for {
                 select {
                 case <-done:
@@ -245,16 +246,25 @@ func (r *RealClient) ImportInstance(project, targetName string, rstream io.Reade
                 case <-time.After(1 * time.Second):
                     _ = op.Refresh()
                     st := op.Get().Status
-                    if st != last && st != "" {
+                    if st != lastStatus && st != "" {
                         fmt.Fprintf(progressOut, "\r[server] %s", st)
-                        last = st
+                        lastStatus = st
                     }
                 }
             }
         }()
-        defer func() { close(done); fmt.Fprint(progressOut, "\n") }()
     }
     err = op.Wait()
+    if progressOut != nil {
+        // Ensure we print the final status if we missed it between polls.
+        _ = op.Refresh()
+        st := op.Get().Status
+        if st != "" && st != lastStatus {
+            fmt.Fprintf(progressOut, "\r[server] %s", st)
+        }
+        if done != nil { close(done) }
+        fmt.Fprint(progressOut, "\n")
+    }
     return err
 }
 
