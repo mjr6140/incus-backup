@@ -3,6 +3,8 @@ package incusapi
 import (
     "errors"
     "io"
+    "os"
+    "strings"
     incuscli "github.com/lxc/incus/client"
     "github.com/lxc/incus/shared/api"
 )
@@ -173,14 +175,64 @@ func (r *RealClient) DeleteStoragePool(name string) error {
 }
 
 func (r *RealClient) ListInstances(project string) ([]Instance, error) {
-    // TODO: implement real call with project change when wiring full support.
-    return nil, errors.New("ListInstances not implemented yet")
+    srv := r.c
+    if project != "" && project != "default" {
+        srv = srv.UseProject(project)
+    }
+    insts, err := srv.GetInstances(api.InstanceTypeAny)
+    if err != nil { return nil, err }
+    out := make([]Instance, 0, len(insts))
+    for _, in := range insts {
+        out = append(out, Instance{Project: project, Name: in.Name, Type: string(in.Type)})
+    }
+    return out, nil
 }
 
 func (r *RealClient) ExportInstance(project, name string, optimized bool, snapshot string) (io.ReadCloser, error) {
-    return nil, errors.New("ExportInstance not implemented yet")
+    srv := r.c
+    if project != "" && project != "default" { srv = srv.UseProject(project) }
+    req := api.InstanceBackupsPost{
+        Name:                 "",
+        InstanceOnly:         false,
+        OptimizedStorage:     optimized,
+        CompressionAlgorithm: "",
+    }
+    op, err := srv.CreateInstanceBackup(name, req)
+    if err != nil { return nil, err }
+    // Wait for completion
+    if err := op.Wait(); err != nil { return nil, err }
+    // Determine backup name from operation resources
+    resources := op.Get().Resources
+    if len(resources["backups"]) == 0 {
+        return nil, errors.New("no backup resource returned")
+    }
+    backupURL := resources["backups"][0]
+    // Extract the last path segment as name
+    seg := backupURL[strings.LastIndex(backupURL, "/")+1:]
+    // Prepare a temp file and download
+    f, err := os.CreateTemp("", "incus-export-*.tar")
+    if err != nil { return nil, err }
+    // Ensure cleanup of server-side backup once done
+    defer func() { go func() { bop, _ := srv.DeleteInstanceBackup(name, seg); if bop != nil { _ = bop.Wait() } }() }()
+    // Download into the temp file
+    reqFile := incuscli.BackupFileRequest{BackupFile: f}
+    if _, err := srv.GetInstanceBackupFile(name, seg, &reqFile); err != nil {
+        _ = f.Close(); _ = os.Remove(f.Name())
+        return nil, err
+    }
+    if _, err := f.Seek(0, io.SeekStart); err != nil { _ = f.Close(); _ = os.Remove(f.Name()); return nil, err }
+    // Return a ReadCloser that deletes the temp file on close
+    return &tempFileReadCloser{File: f}, nil
 }
 
 func (r *RealClient) ImportInstance(project, targetName string, rstream io.Reader) error {
-    return errors.New("ImportInstance not implemented yet")
+    srv := r.c
+    if project != "" && project != "default" { srv = srv.UseProject(project) }
+    args := incuscli.InstanceBackupArgs{BackupFile: rstream, Name: targetName}
+    op, err := srv.CreateInstanceFromBackup(args)
+    if err != nil { return err }
+    return op.Wait()
 }
+
+type tempFileReadCloser struct{ *os.File }
+func (t *tempFileReadCloser) Close() error { name := t.Name(); err := t.File.Close(); _ = os.Remove(name); return err }

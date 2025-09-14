@@ -15,6 +15,7 @@ import (
 func newBackupCmd(stdout, stderr io.Writer) *cobra.Command {
     cmd := &cobra.Command{Use: "backup", Short: "Create backups"}
     cmd.AddCommand(newBackupConfigCmd(stdout, stderr))
+    cmd.AddCommand(newBackupInstancesCmd(stdout, stderr))
     return cmd
 }
 
