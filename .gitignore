@@ -1,0 +1,17 @@
+# Go build
+bin/
+dist/
+
+# Go module/build caches (persisted for itest but not committed)
+.cache/
+
+# Env files
+.env
+.env.local
+
+# Editor/OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
