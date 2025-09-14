@@ -32,7 +32,7 @@ Legend: [ ] Todo · [~] In progress · [x] Done
   - Output formats: table/json/yaml.
   - Tests: unit with temp dirs; golden manifests; list formatting.
 
-- [~] Safety utilities
+- [x] Safety utilities
   - `--dry-run`, `--yes`/`-y`, `--force`; interactive prompt helper.
   - Tests: unit for plan decisions; prompt behavior mocked.
 
