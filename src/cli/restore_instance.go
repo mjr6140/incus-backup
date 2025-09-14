@@ -8,6 +8,7 @@ import (
     "path/filepath"
     "sort"
     "strings"
+    "text/tabwriter"
 
     "github.com/spf13/cobra"
 
@@ -41,15 +42,21 @@ func newRestoreInstanceCmd(stdout, stderr io.Writer) *cobra.Command {
             if err != nil { return err }
             opts := getSafetyOptions(cmd)
             if opts.DryRun {
-                // Print a simple plan and exit
+                // Table-style preview
+                action := "create"
                 if exists {
-                    action := "error (exists)"
-                    if replace { action = "replace existing" }
+                    action = "conflict"
+                    if replace { action = "replace" }
                     if skipExisting { action = "skip" }
-                    fmt.Fprintf(stdout, "Would restore instance %s in project %s from %s: %s\n", destName, project, snapDir, action)
-                } else {
-                    fmt.Fprintf(stdout, "Would restore instance %s in project %s from %s\n", destName, project, snapDir)
                 }
+                versionID := filepath.Base(snapDir)
+                renderInstanceRestorePreview(stdout, []instancePreviewRow{{
+                    Action:     action,
+                    Project:    project,
+                    Name:       name,
+                    TargetName: destName,
+                    Version:    versionID,
+                }})
                 return nil
             }
             if exists {
@@ -76,6 +83,23 @@ func newRestoreInstanceCmd(stdout, stderr io.Writer) *cobra.Command {
     cmd.Flags().BoolVar(&replace, "replace", false, "Replace existing instance if it exists")
     cmd.Flags().BoolVar(&skipExisting, "skip-existing", false, "Skip if the target instance already exists")
     return cmd
+}
+
+type instancePreviewRow struct {
+    Action     string
+    Project    string
+    Name       string
+    TargetName string
+    Version    string
+}
+
+func renderInstanceRestorePreview(w io.Writer, rows []instancePreviewRow) {
+    tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+    fmt.Fprintln(tw, "ACTION\tPROJECT\tNAME\tTARGET_NAME\tVERSION")
+    for _, r := range rows {
+        fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", r.Action, r.Project, r.Name, r.TargetName, r.Version)
+    }
+    _ = tw.Flush()
 }
 
 func resolveInstanceSnapshotDir(tgt target.Target, project, name, version string) (string, error) {
