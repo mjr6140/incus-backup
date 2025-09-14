@@ -20,7 +20,8 @@ func NewRootCmd(stdout, stderr io.Writer) *cobra.Command {
     cmd.SetOut(stdout)
     cmd.SetErr(stderr)
 
-    // Global flags would be added here later (log level, target, etc.).
+    // Global flags (log level to be added later; safety flags now)
+    addGlobalFlags(cmd)
 
     // Subcommands
     cmd.AddCommand(newVersionCmd(stdout))
