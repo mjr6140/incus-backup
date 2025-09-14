@@ -69,7 +69,7 @@ Integration tests specifics:
 - Use temporary Incus projects; ensure cleanup on failure.
 - Never modify managed networks or storage pools without explicit gating.
 
-CLI invariants (see REQUIREMENTS.md):
+CLI invariants (see README.md):
 - Verb–resource syntax (e.g., `backup instances`, `restore volume`).
 - Canonical backend URI via `--target` (e.g., `dir:/path`). No `--dir` shorthand.
 - Snapshot-by-default exports; portable format by default; `--optimized` optional.

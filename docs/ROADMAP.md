@@ -95,5 +95,5 @@ Snapshot-by-default behavior
 
 ## References
 
-- Requirements/spec: `REQUIREMENTS.md`
+- Requirements/spec: `README.md`
 - Agent/development guidelines: `AGENTS.md`
