@@ -21,5 +21,5 @@ type Client interface {
     ListProjects() ([]Project, error)
     CreateProject(name string, config map[string]string) error
     DeleteProject(name string) error
+    UpdateProject(name string, config map[string]string) error
 }
-

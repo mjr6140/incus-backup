@@ -51,3 +51,12 @@ func (r *RealClient) DeleteProject(name string) error {
     return r.c.DeleteProject(name)
 }
 
+func (r *RealClient) UpdateProject(name string, config map[string]string) error {
+    // Need ETag
+    _, etag, err := r.c.GetProject(name)
+    if err != nil {
+        return err
+    }
+    put := api.ProjectPut{Config: config}
+    return r.c.UpdateProject(name, put, etag)
+}

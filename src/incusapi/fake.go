@@ -45,9 +45,24 @@ func (f *FakeClient) DeleteProject(name string) error {
     return nil
 }
 
+func (f *FakeClient) UpdateProject(name string, config map[string]string) error {
+    if _, ok := f.ProjectsMap[name]; !ok {
+        return &NotFoundError{Resource: "project", Name: name}
+    }
+    if config == nil {
+        config = map[string]string{}
+    }
+    p := f.ProjectsMap[name]
+    // copy map defensively
+    copied := make(map[string]string, len(config))
+    for k, v := range config { copied[k] = v }
+    p.Config = copied
+    f.ProjectsMap[name] = p
+    return nil
+}
+
 type ConflictError struct{ Resource, Name string }
 func (e *ConflictError) Error() string { return e.Resource + " conflict: " + e.Name }
 
 type NotFoundError struct{ Resource, Name string }
 func (e *NotFoundError) Error() string { return e.Resource + " not found: " + e.Name }
-

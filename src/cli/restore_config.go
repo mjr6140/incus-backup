@@ -12,6 +12,7 @@ import (
     "github.com/spf13/cobra"
 
     cfg "incus-backup/src/backup/config"
+    "incus-backup/src/safety"
     "incus-backup/src/incusapi"
     "incus-backup/src/target"
 )
@@ -29,9 +30,6 @@ func newRestoreConfigCmd(stdout, stderr io.Writer) *cobra.Command {
         Use:   "config",
         Short: "Preview or apply declarative config from a backup",
         RunE: func(cmd *cobra.Command, args []string) error {
-            if apply {
-                return fmt.Errorf("--apply not implemented yet; preview only")
-            }
             tgtStr, _ := cmd.Flags().GetString("target")
             if tgtStr == "" {
                 return fmt.Errorf("--target is required (e.g., dir:/path)")
@@ -51,17 +49,37 @@ func newRestoreConfigCmd(stdout, stderr io.Writer) *cobra.Command {
             if err != nil { return err }
 
             plan := cfg.BuildProjectsPlan(current, desired)
-            switch output {
-            case "json":
-                enc := json.NewEncoder(stdout)
-                enc.SetIndent("", "  ")
-                return enc.Encode(plan)
-            case "table", "":
+            if !apply {
+                switch output {
+                case "json":
+                    enc := json.NewEncoder(stdout)
+                    enc.SetIndent("", "  ")
+                    return enc.Encode(plan)
+                case "table", "":
+                    renderProjectsPlan(stdout, plan)
+                    return nil
+                default:
+                    return fmt.Errorf("unsupported --output: %s", output)
+                }
+            }
+            // Apply mode
+            opts := getSafetyOptions(cmd)
+            if opts.DryRun {
+                // print preview then exit
                 renderProjectsPlan(stdout, plan)
                 return nil
-            default:
-                return fmt.Errorf("unsupported --output: %s", output)
             }
+            // Prompt once with summary unless --yes
+            var buf strings.Builder
+            buf.WriteString("Apply config changes for projects?\n")
+            buf.WriteString(fmt.Sprintf("Create: %d, Update: %d, Delete: %d\n", len(plan.ToCreate), len(plan.ToUpdate), len(plan.ToDelete)))
+            ok, err := safety.Confirm(opts, os.Stdin, stdout, buf.String())
+            if err != nil { return err }
+            if !ok { return nil }
+            summary, err := cfg.ApplyProjectsPlan(client, plan)
+            if err != nil { return err }
+            fmt.Fprintln(stdout, summary)
+            return nil
         },
     }
     cmd.Flags().String("target", "", "Backend target URI (e.g., dir:/path)")
@@ -107,4 +125,3 @@ func renderProjectsPlan(w io.Writer, p cfg.ProjectPlan) {
     fmt.Fprintf(w, "Delete: %d\n", len(p.ToDelete))
     for _, d := range p.ToDelete { fmt.Fprintf(w, "  - %s\n", d.Name) }
 }
-
