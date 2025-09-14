@@ -41,22 +41,22 @@ func newRestoreInstanceCmd(stdout, stderr io.Writer) *cobra.Command {
             exists, err := client.InstanceExists(project, destName)
             if err != nil { return err }
             opts := getSafetyOptions(cmd)
+            // Always echo a table-style preview before taking action
+            action := "create"
+            if exists {
+                action = "conflict"
+                if replace { action = "replace" }
+                if skipExisting { action = "skip" }
+            }
+            versionID := filepath.Base(snapDir)
+            renderInstanceRestorePreview(stdout, []instancePreviewRow{{
+                Action:     action,
+                Project:    project,
+                Name:       name,
+                TargetName: destName,
+                Version:    versionID,
+            }})
             if opts.DryRun {
-                // Table-style preview
-                action := "create"
-                if exists {
-                    action = "conflict"
-                    if replace { action = "replace" }
-                    if skipExisting { action = "skip" }
-                }
-                versionID := filepath.Base(snapDir)
-                renderInstanceRestorePreview(stdout, []instancePreviewRow{{
-                    Action:     action,
-                    Project:    project,
-                    Name:       name,
-                    TargetName: destName,
-                    Version:    versionID,
-                }})
                 return nil
             }
             if exists {
