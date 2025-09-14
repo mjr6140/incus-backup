@@ -48,8 +48,24 @@ Legend: [ ] Todo · [~] In progress · [x] Done
 
 - [~] Instance backup (portable, snapshot-by-default)
   - `backup instances [NAME ...]` implemented using Incus backup API; `--optimized` flag.
-  - Snapshot-by-default behavior planned; current export uses server backup (no temp snapshot yet).
+  - Snapshot-by-default behavior (planned): when an instance is running, take a
+    temporary Incus snapshot, export from that snapshot, then delete the temp
+    snapshot. This improves consistency of the exported filesystem without
+    forcing downtime. Provide a `--no-snapshot` escape hatch for advanced use.
   - Tests: unit for manifest; integration with Alpine instance.
+
+Snapshot-by-default behavior
+- Goal: Make exported data consistent when instances or volumes are running.
+- How it works (instances):
+  - Create a temporary snapshot (e.g., `tmp-incus-backup-<ts>`).
+  - Export from that snapshot rather than the live instance.
+  - Delete the temporary snapshot after a successful export (and on failure when possible).
+- How it works (volumes):
+  - Create a storage volume snapshot, export from the snapshot, then delete it.
+- Flags and UX:
+  - Enabled by default for `backup instances` and `backup volumes`.
+  - `--no-snapshot` disables the behavior (may be faster but risks inconsistency).
+  - `--optimized` still supported; document portability trade-offs vs. speed.
 
 - [x] Instance restore (rename/replace)
   - `restore instance NAME [--version TS] [--target-name NEW]` with `--replace|--skip-existing`.
