@@ -332,3 +332,20 @@ func (r *RealClient) DeleteInstance(project, name string) error {
     if err != nil { return err }
     return op.Wait()
 }
+
+func (r *RealClient) CreateInstanceSnapshot(project, name, snapshot string) error {
+    srv := r.c
+    if project != "" && project != "default" { srv = srv.UseProject(project) }
+    req := api.InstanceSnapshotsPost{Name: snapshot}
+    op, err := srv.CreateInstanceSnapshot(name, req)
+    if err != nil { return err }
+    return op.Wait()
+}
+
+func (r *RealClient) DeleteInstanceSnapshot(project, name, snapshot string) error {
+    srv := r.c
+    if project != "" && project != "default" { srv = srv.UseProject(project) }
+    op, err := srv.DeleteInstanceSnapshot(name, snapshot)
+    if err != nil { return err }
+    return op.Wait()
+}

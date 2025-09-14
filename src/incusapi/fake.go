@@ -14,6 +14,7 @@ type FakeClient struct {
     NetworksMap      map[string]Network
     StoragePoolsMap  map[string]StoragePool
     Instances        map[string]map[string][]byte // project -> name -> export bytes
+    Snapshots        map[string]map[string]struct{} // key: project/name@snap -> exists
 }
 
 func NewFake() *FakeClient {
@@ -23,6 +24,7 @@ func NewFake() *FakeClient {
         NetworksMap:     map[string]Network{},
         StoragePoolsMap: map[string]StoragePool{},
         Instances:       map[string]map[string][]byte{},
+        Snapshots:       map[string]map[string]struct{}{},
     }
 }
 
@@ -198,6 +200,19 @@ func (f *FakeClient) DeleteInstance(project, name string) error {
     if f.Instances[project] == nil { return &NotFoundError{Resource: "instance", Name: name} }
     if _, ok := f.Instances[project][name]; !ok { return &NotFoundError{Resource: "instance", Name: name} }
     delete(f.Instances[project], name)
+    return nil
+}
+
+func (f *FakeClient) CreateInstanceSnapshot(project, name, snapshot string) error {
+    key := project + "/" + name
+    if f.Snapshots[key] == nil { f.Snapshots[key] = map[string]struct{}{} }
+    f.Snapshots[key][snapshot] = struct{}{}
+    return nil
+}
+
+func (f *FakeClient) DeleteInstanceSnapshot(project, name, snapshot string) error {
+    key := project + "/" + name
+    if f.Snapshots[key] != nil { delete(f.Snapshots[key], snapshot) }
     return nil
 }
 

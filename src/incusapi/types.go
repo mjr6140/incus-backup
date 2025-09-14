@@ -84,4 +84,7 @@ type Client interface {
     InstanceExists(project, name string) (bool, error)
     StopInstance(project, name string, force bool) error
     DeleteInstance(project, name string) error
+    // Snapshot lifecycle
+    CreateInstanceSnapshot(project, name, snapshot string) error
+    DeleteInstanceSnapshot(project, name, snapshot string) error
 }

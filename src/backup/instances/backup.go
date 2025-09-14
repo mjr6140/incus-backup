@@ -23,8 +23,14 @@ func BackupInstance(client incusapi.Client, root, project, name string, optimize
 
     snapName := ""
     if snapshot {
-        // Snapshot mechanics are handled by client.ExportInstance when snapshot name is provided
-        snapName = "tmp-incus-backup"
+        snapName = "tmp-incus-backup-" + ts
+        if progressOut != nil { fmt.Fprintf(progressOut, "[snapshot] create %s@%s\n", name, snapName) }
+        if err := client.CreateInstanceSnapshot(project, name, snapName); err != nil { return "", err }
+        // Ensure snapshot cleanup
+        defer func() {
+            if progressOut != nil { fmt.Fprintf(progressOut, "[snapshot] delete %s@%s\n", name, snapName) }
+            _ = client.DeleteInstanceSnapshot(project, name, snapName)
+        }()
     }
     r, err := client.ExportInstance(project, name, optimized, snapName, progressOut)
     if err != nil { return "", err }
