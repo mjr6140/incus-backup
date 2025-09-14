@@ -29,7 +29,7 @@ func TestInstanceBackupAndRestore_WithFakeClient(t *testing.T) {
     }
 
     // Restore to a new name
-    if err := inst.RestoreInstance(fake, dir, "default", "web-restored"); err != nil {
+    if err := inst.RestoreInstance(fake, dir, "default", "web-restored", nil); err != nil {
         t.Fatalf("restore instance: %v", err)
     }
     // Verify fake has restored content
@@ -37,4 +37,3 @@ func TestInstanceBackupAndRestore_WithFakeClient(t *testing.T) {
         t.Fatalf("unexpected restored content: %q", got)
     }
 }
-

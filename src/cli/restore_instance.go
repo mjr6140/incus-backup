@@ -73,7 +73,7 @@ func newRestoreInstanceCmd(stdout, stderr io.Writer) *cobra.Command {
                 _ = client.StopInstance(project, destName, true)
                 if err := client.DeleteInstance(project, destName); err != nil { return err }
             }
-            return inst.RestoreInstance(client, snapDir, project, destName)
+            return inst.RestoreInstance(client, snapDir, project, destName, stdout)
         },
     }
     cmd.Flags().String("target", "", "Backend target URI (e.g., dir:/path)")
