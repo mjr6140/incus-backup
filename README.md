@@ -1,4 +1,9 @@
-Incus Backup — a backup utility for an Incus server (https://linuxcontainers.org/incus/).
+# Incus Backup
+
+Reliable, testable backups and restores for Incus (https://linuxcontainers.org/incus/),
+designed to run on the host. It automates common backup/restore workflows while
+prioritizing safety (dry-runs, confirmations), auditability (manifests + checksums),
+and portability.
 
 It is intended to run on the Incus host and produce backups that can be easily
 restored. It automates common backup and restore workflows while prioritizing
@@ -6,9 +11,62 @@ safety and auditability.
 
 Incus docs on backups: https://linuxcontainers.org/incus/docs/main/backup/
 
-This tool will use the Incus API directly and orchestrate exports/imports for
+This tool uses the Incus API directly and orchestrates exports/imports for
 instances, volumes, images (optional), and declarative config (projects,
 profiles, networks, storage pool config) needed to recreate environment state.
+
+# CLI Syntax
+
+Top-level commands: `backup`, `restore`, `list`, `verify` (future), `prune` (future).
+
+## Commands Overview
+
+- `incus-backup backup all` — Back up config, all custom volumes, and all instances.
+- `incus-backup backup config` — Back up declarative config (projects/profiles/networks/storage).
+- `incus-backup backup instances [NAME ...]` — Back up all or selected instances.
+- `incus-backup backup volumes [POOL/NAME ...]` — Back up all or selected custom volumes.
+- `incus-backup restore all` — Restore config (preview/apply), all volumes, then all instances.
+- `incus-backup restore config` — Preview/apply declarative config changes from backup.
+- `incus-backup restore instance NAME` — Restore a single instance.
+- `incus-backup restore instances [NAME ...]` — Restore all or selected instances.
+- `incus-backup restore volume POOL/NAME` — Restore a single custom volume.
+- `incus-backup restore volumes [POOL/NAME ...]` — Restore all or selected custom volumes.
+- `incus-backup list [all|instances|volumes|images|config]` — List snapshots in target.
+
+## Common Flags
+
+- Global: `--target`, `--project`, `--dry-run`, `--yes|-y`, `--force`
+- Backup: `--optimized`, `--no-snapshot`
+- Restore (bulk and single): `--version`, `--replace`, `--skip-existing`, `--target-name` (single)
+
+## Quick Examples
+
+- Back up everything to a directory target
+  - `incus-backup backup all --target dir:/mnt/backups/incus`
+
+- Restore everything (apply config), replacing where needed, non-interactive
+  - `incus-backup restore all --target dir:/mnt/backups/incus --apply-config --replace -y`
+
+- Back up selected instances and a custom volume
+  - `incus-backup backup instances web1 db1 --target dir:/mnt/backups/incus`
+  - `incus-backup backup volumes default/data --target dir:/mnt/backups/incus`
+
+- Restore a single instance to a new name (preview first)
+  - `incus-backup restore instance web1 --target dir:/mnt/backups/incus --target-name web1-restored --dry-run`
+  - `incus-backup restore instance web1 --target dir:/mnt/backups/incus --target-name web1-restored -y`
+
+- Bulk restore instances and volumes (skip ones that already exist)
+  - `incus-backup restore instances --target dir:/mnt/backups/incus --skip-existing -y`
+  - `incus-backup restore volumes --target dir:/mnt/backups/incus --skip-existing -y`
+
+## Conventions
+
+- Prefer long flags with double hyphens: `--flag value` (also accept `--flag=value`).
+- Short flags for common toggles only: `-y` (`--yes`), `-q` (`--quiet`).
+- Hyphenated flag names: `--log-level`, `--dry-run`.
+- Verb then resource: `backup instances`, `restore volume`, `list images`.
+- Positional names after the resource; omit names to mean “all of that kind”.
+- Repeatable flags for multi-values where needed.
 
 # Tech Stack
 
@@ -50,6 +108,25 @@ A backup target must be configured.
 
 Top-level commands: `backup`, `restore`, `list`, `verify` (future), `prune` (future).
 
+## Commands Overview
+
+- `incus-backup backup all` — Back up config, all custom volumes, and all instances.
+- `incus-backup backup config` — Back up declarative config (projects/profiles/networks/storage).
+- `incus-backup backup instances [NAME ...]` — Back up all or selected instances.
+- `incus-backup backup volumes [POOL/NAME ...]` — Back up all or selected custom volumes.
+- `incus-backup restore all` — Restore config (preview/apply), all volumes, then all instances.
+- `incus-backup restore config` — Preview/apply declarative config changes from backup.
+- `incus-backup restore instance NAME` — Restore a single instance.
+- `incus-backup restore instances [NAME ...]` — Restore all or selected instances.
+- `incus-backup restore volume POOL/NAME` — Restore a single custom volume.
+- `incus-backup restore volumes [POOL/NAME ...]` — Restore all or selected custom volumes.
+- `incus-backup list [all|instances|volumes|images|config]` — List snapshots in target.
+
+Common flags
+- Global: `--target`, `--project`, `--dry-run`, `--yes|-y`, `--force`
+- Backup: `--optimized`, `--no-snapshot`
+- Restore (bulk and single): `--version`, `--replace`, `--skip-existing`, `--target-name` (single)
+
 Conventions:
 
 - Prefer long flags with double hyphens: `--flag value` (also accept `--flag=value`).
@@ -75,9 +152,9 @@ Global flags:
 
 Backup:
 
-- All: `incus-backup backup all --target dir:/mnt/nas/sysbackup/incus`
-- Instances: `incus-backup backup instances [NAME ...] --target dir:/path [--images none|referenced|all]`
-- Volumes: `incus-backup backup volumes [POOL/NAME ...] --target dir:/path`
+- All: `incus-backup backup all --target dir:/path [--project default] [--optimized] [--no-snapshot]`
+- Instances: `incus-backup backup instances [NAME ...] --target dir:/path [--project default] [--optimized] [--no-snapshot]`
+- Volumes: `incus-backup backup volumes [POOL/NAME ...] --target dir:/path [--project default] [--optimized] [--no-snapshot]`
 - Images: `incus-backup backup images [FINGERPRINT ...] --target dir:/path`
 - Config (declarative state only): `incus-backup backup config --target dir:/path`
 
@@ -91,11 +168,11 @@ Backup options and defaults:
 
 Restore:
 
-- All (latest): `incus-backup restore all --target dir:/path [--latest|--version TS]`
-- Instance (one): `incus-backup restore instance NAME --target dir:/path [--version TS] [--target-name NEW] [--replace|--skip-existing]`
-- Instances (all/selected): `incus-backup restore instances [NAME ...] --target dir:/path [--version TS] [--replace|--skip-existing]`
-- Volume (one): `incus-backup restore volume POOL/NAME --target dir:/path [--version TS] [--target-name NEW] [--replace|--skip-existing]`
-- Volumes (all/selected): `incus-backup restore volumes [POOL/NAME ...] --target dir:/path [--version TS] [--replace|--skip-existing]`
+- All: `incus-backup restore all --target dir:/path [--project default] [--apply-config] [--version TS] [--replace|--skip-existing]`
+- Instance (one): `incus-backup restore instance NAME --target dir:/path [--project default] [--version TS] [--target-name NEW] [--replace|--skip-existing]`
+- Instances (all/selected): `incus-backup restore instances [NAME ...] --target dir:/path [--project default] [--version TS] [--replace|--skip-existing]`
+- Volume (one): `incus-backup restore volume POOL/NAME --target dir:/path [--project default] [--version TS] [--target-name NEW] [--replace|--skip-existing]`
+- Volumes (all/selected): `incus-backup restore volumes [POOL/NAME ...] --target dir:/path [--project default] [--version TS] [--replace|--skip-existing]`
 - Images: `incus-backup restore images [FINGERPRINT ...] --target dir:/path [--version TS]`
 - Config: `incus-backup restore config --target dir:/path [--version TS] [--apply]`
   - Default: preview only (prints changes). `--apply` required to change
@@ -134,9 +211,9 @@ operation proceeds and the tool performs any prerequisite actions needed (e.g.,
 stopping instances to replace an attached volume), with clear logging.
 
 For example:
-`incus-backup restore volume POOL/dockge-data --version 20250914T121314`
+`incus-backup restore volume POOL/sample-data --version 20250914T121314`
 
-If the `dockge-data` volume already exists, the application prompts for
+If the `sample-data` volume already exists, the application prompts for
 confirmation. If confirmed (or with `--yes`), it replaces the contents
 atomically (best effort) and restarts any previously running instances after
 replacement. `--force` implies `--yes` and also permits actions like
@@ -234,4 +311,4 @@ auditable layout with metadata and checksums.
 - `make test-integration` — run integration tests with safeguards
 - `make build` — produce a static binary
 - `make run` — run the CLI locally (e.g., `make run ARGS="--help"`)
-- All: `incus-backup restore all --target dir:/path [--apply-config] [--version TS] [--replace|--skip-existing]`
+ 

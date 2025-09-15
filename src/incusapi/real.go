@@ -362,6 +362,8 @@ func (r *RealClient) ListCustomVolumes(project string) ([]Volume, error) {
         if err != nil { return nil, err }
         for _, v := range vols {
             if v.Type != "custom" { continue }
+            // Skip snapshots (Incus returns custom snapshot volumes as "vol/snap")
+            if strings.Contains(v.Name, "/") { continue }
             out = append(out, Volume{Project: project, Pool: p.Name, Name: v.Name, ContentType: v.ContentType})
         }
     }
