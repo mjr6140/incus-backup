@@ -46,12 +46,9 @@ Legend: [ ] Todo · [~] In progress · [x] Done
   - `restore config` previews and applies (projects, networks, storage pools); deletions for networks/pools require `--force`.
   - Tests: unit for planners/apply; integration for backup/preview and apply.
 
-- [~] Instance backup (portable, snapshot-by-default)
+- [x] Instance backup (portable, snapshot-by-default)
   - `backup instances [NAME ...]` implemented using Incus backup API; `--optimized` flag.
-  - Snapshot-by-default behavior (planned): when an instance is running, take a
-    temporary Incus snapshot, export from that snapshot, then delete the temp
-    snapshot. This improves consistency of the exported filesystem without
-    forcing downtime. Provide a `--no-snapshot` escape hatch for advanced use.
+  - Snapshot-by-default behavior implemented: create a temporary snapshot, export from it, then delete it. `--no-snapshot` escape hatch available.
   - Tests: unit for manifest; integration with Alpine instance.
 
 Snapshot-by-default behavior
@@ -73,15 +70,20 @@ Snapshot-by-default behavior
   - Progress during import plus server-side status polling (Running → Success).
   - Tests: integration for standard restore, --replace, --target-name, --skip-existing.
 
-- [~] Bulk restore (instances, volumes)
+- [x] Bulk restore (instances, volumes)
   - `restore instances [NAME ...]` restores all if unspecified, with single preview/confirmation.
   - `restore volumes [POOL/NAME ...]` restores all if unspecified, with single preview/confirmation.
   - Applies `--replace|--skip-existing` policies consistently across items.
+  - Per-item headers and progress on import.
 
-- [ ] Volume backup/restore (project-scoped)
+- [x] Volume backup/restore (project-scoped)
   - `backup volumes` and `restore volume` with snapshot-by-default.
   - Paths: `volumes/<project>/<pool>/<name>/...`.
-  - Tests: unit for mapping/paths; integration round-trip for a small volume.
+  - Tests: unit for roundtrip; integration (roundtrip, target-name, replace, skip-existing).
+
+- [x] Restore all (orchestrated)
+  - `restore all` runs: config preview/apply → volumes (bulk) → instances (bulk).
+  - Single preview across sections; single confirmation; policy flags applied.
 
 - [ ] Verify/prune
   - `verify` checks checksums/manifest integrity; `prune` keep-N or policy.

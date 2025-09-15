@@ -234,3 +234,4 @@ auditable layout with metadata and checksums.
 - `make test-integration` — run integration tests with safeguards
 - `make build` — produce a static binary
 - `make run` — run the CLI locally (e.g., `make run ARGS="--help"`)
+- All: `incus-backup restore all --target dir:/path [--apply-config] [--version TS] [--replace|--skip-existing]`
