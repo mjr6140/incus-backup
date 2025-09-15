@@ -27,8 +27,11 @@ func newRestoreVolumeCmd(stdout, stderr io.Writer) *cobra.Command {
         Args:  cobra.ExactArgs(1),
         RunE: func(cmd *cobra.Command, args []string) error {
             var name string
-            n, _ := fmt.Sscanf(args[0], "%[^/]/%s", &pool, &name)
-            if n != 2 || pool == "" || name == "" { return fmt.Errorf("invalid volume spec %q (expected POOL/NAME)", args[0]) }
+            // Parse POOL/NAME safely (Go's fmt.Scanf doesn't support scansets like %[^/])
+            if parts := strings.SplitN(args[0], "/", 2); len(parts) == 2 {
+                pool, name = parts[0], parts[1]
+            }
+            if pool == "" || name == "" { return fmt.Errorf("invalid volume spec %q (expected POOL/NAME)", args[0]) }
             tgtStr, _ := cmd.Flags().GetString("target")
             if tgtStr == "" { return errors.New("--target is required (e.g., dir:/path)") }
             tgt, err := target.Parse(tgtStr)
@@ -87,4 +90,3 @@ func resolveVolumeSnapshotDir(tgt target.Target, project, pool, name, version st
     sort.Strings(snaps)
     return filepath.Join(base, snaps[len(snaps)-1]), nil
 }
-

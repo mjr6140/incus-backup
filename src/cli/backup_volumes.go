@@ -10,6 +10,7 @@ import (
     vol "incus-backup/src/backup/volumes"
     "incus-backup/src/incusapi"
     "incus-backup/src/target"
+    "strings"
 )
 
 func newBackupVolumesCmd(stdout, stderr io.Writer) *cobra.Command {
@@ -34,8 +35,10 @@ func newBackupVolumesCmd(stdout, stderr io.Writer) *cobra.Command {
             } else {
                 for _, a := range args {
                     var pool, name string
-                    n, _ := fmt.Sscanf(a, "%[^/]/%s", &pool, &name)
-                    if n != 2 { return fmt.Errorf("invalid volume spec %q (expected POOL/NAME)", a) }
+                    if parts := strings.SplitN(a, "/", 2); len(parts) == 2 {
+                        pool, name = parts[0], parts[1]
+                    }
+                    if pool == "" || name == "" { return fmt.Errorf("invalid volume spec %q (expected POOL/NAME)", a) }
                     items = append(items, [2]string{pool, name})
                 }
             }
@@ -55,4 +58,3 @@ func newBackupVolumesCmd(stdout, stderr io.Writer) *cobra.Command {
     cmd.Flags().BoolVar(&noSnapshot, "no-snapshot", false, "Do not create a temporary snapshot before export")
     return cmd
 }
-
