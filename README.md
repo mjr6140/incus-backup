@@ -92,8 +92,8 @@ Backup options and defaults:
 Restore:
 
 - All (latest): `incus-backup restore all --target dir:/path [--latest|--version TS]`
-- Instance: `incus-backup restore instance NAME --target dir:/path [--version TS] [--target-name NEW]`
-- Volume: `incus-backup restore volume POOL/NAME --target dir:/path [--version TS] [--target-name NEW]`
+- Instance: `incus-backup restore instance NAME --target dir:/path [--version TS] [--target-name NEW] [--replace|--skip-existing]`
+- Volume: `incus-backup restore volume POOL/NAME --target dir:/path [--version TS] [--target-name NEW] [--replace|--skip-existing]`
 - Images: `incus-backup restore images [FINGERPRINT ...] --target dir:/path [--version TS]`
 - Config: `incus-backup restore config --target dir:/path [--version TS] [--apply]`
   - Default: preview only (prints changes). `--apply` required to change
