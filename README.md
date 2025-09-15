@@ -198,10 +198,10 @@ List:
 - Images: `incus-backup list images [FINGERPRINT] --target dir:/path`
 - Config: `incus-backup list config --target dir:/path`
 
-Verify & Prune (future):
+Verify & Prune:
 
-- Verify: `incus-backup verify [all|instances|volumes|images|config] --target ...`
-- Prune: `incus-backup prune --target ... [--keep N | --policy daily=7,weekly=4,monthly=12]`
+- Verify: `incus-backup verify [all|instances|volumes|images|config] --target dir:/path [--output table|json]`
+- Prune: `incus-backup prune [all|instances|volumes|images|config] --target dir:/path --keep N` (respects `--dry-run`)
 
 # Requirements
 

@@ -28,6 +28,8 @@ func NewRootCmd(stdout, stderr io.Writer) *cobra.Command {
     cmd.AddCommand(newListCmd(stdout, stderr))
     cmd.AddCommand(newBackupCmd(stdout, stderr))
     cmd.AddCommand(newRestoreCmd(stdout, stderr))
+    cmd.AddCommand(newVerifyCmd(stdout, stderr))
+    cmd.AddCommand(newPruneCmd(stdout, stderr))
 
     return cmd
 }

@@ -85,9 +85,9 @@ Snapshot-by-default behavior
   - `restore all` runs: config preview/apply → volumes (bulk) → instances (bulk).
   - Single preview across sections; single confirmation; policy flags applied.
 
-- [ ] Verify/prune
-  - `verify` checks checksums/manifest integrity; `prune` keep-N or policy.
-  - Tests: unit for policy and verification; light integration for verify.
+- [x] Verify/prune
+  - `verify` checks checksums/manifest integrity; `prune` keep-N per resource.
+  - Supports `--dry-run` and table/json outputs for verify.
 
 - [ ] Concurrency + polish
   - `--parallel N` worker pool; retries/backoff; progress polish; stable outputs.
@@ -104,3 +104,72 @@ Snapshot-by-default behavior
 
 - Requirements/spec: `README.md`
 - Agent/development guidelines: `AGENTS.md`
+
+## Future: Restic Backend (design + plan)
+
+Goals
+- Leverage restic’s content-defined chunking, deduplication, and encryption.
+- Avoid pre-compressing exports so restic can dedupe effectively.
+- Preserve existing UX (targets via `--target`) while swapping backends.
+
+Key decisions
+- Stream uncompressed backups into restic:
+  - Instances: request backup with `CompressionAlgorithm: "none"` and stream
+    the tar to restic via `--stdin` (no temp files when possible).
+  - Volumes: same approach using `StoragePoolVolumeBackupsPost` with
+    `CompressionAlgorithm: "none"` (API supports it); stream to restic.
+  - Config: back up JSON manifests directly (no compression) and store as
+    separate restic snapshot(s) tagged appropriately.
+- Tagging and metadata:
+  - Use restic `--tag` to encode type=instance|volume|config, project, pool,
+    name, and timestamp. Optionally include version schema tag.
+  - Store manifest.json alongside the data stream by creating a second tiny
+    snapshot (or include manifest content as an additional `--stdin` stream with
+    a distinct `--stdin-filename`).
+- Listing and selection:
+  - Use `restic snapshots --json --tag ...` to list latest per (type, id).
+  - Mirror directory backend’s “latest per resource unless --version provided”.
+- Restore:
+  - Use `restic restore --include` or `restic dump` (or `restic cat` for stdin)
+    to stream the stored tar back into the importer (instance or volume).
+  - No temp files where possible; import from the restic stream.
+- Retention and verification:
+  - `incus-backup verify` proxies to `restic check` and validates manifests.
+  - `incus-backup prune` maps to `restic forget --prune` with policy flags.
+- Configuration:
+  - Target URI: `--target restic:/path` (local repo) or `restic:repo=...` for
+    remote backends. Rely on RESTIC_PASSWORD/RESTIC_PASSWORD_FILE in env or
+    `--password-file` in config.
+  - Detect restic binary and version; provide clear error guidance if missing.
+
+Open questions
+- Whether to prefer a single synthetic tree per snapshot (restic backup of a
+  virtual directory) or use `--stdin` streams per resource. Current plan favors
+  streaming per resource with tags to avoid staging on disk.
+- How to best surface restic progress in our progress UI (parse `--json` or
+  pass through restic output verbatim).
+- Import portability with `--optimized`: likely keep optimized=false by default
+  for portability; make optimized opt-in due to driver constraints.
+
+Implementation plan
+1) Backend scaffolding
+   - Add `restic` backend implementing StorageBackend interface with feature
+     flags for `supportsStream=true`.
+   - Detect restic, parse repo URI, initialize repo if needed.
+2) Instances (export/import via stdin/stdout)
+   - Set CompressionAlgorithm="none"; stream export → restic `backup --stdin`
+     with tags. Stream restore back into `CreateInstanceFromBackup`.
+3) Volumes (export/import via stdin/stdout)
+   - Same as instances using volume backup APIs; ensure uncompressed streams.
+4) Config
+   - Store `projects.json`, `profiles.json`, `networks.json`, `storage_pools.json`
+     as small files in restic with tags; keep manifest and checksums.
+5) Listing + preview
+   - Implement list by querying restic snapshots with tag filters; compute
+     latest per resource.
+6) Verify + prune
+   - Wire `verify` to `restic check`; implement `prune` via `restic forget` and
+     policies mapped from CLI.
+7) Integration tests
+   - Install restic in the container harness; run local repo tests (no network).
+   - Roundtrip instance/volume and config with restic backend.
