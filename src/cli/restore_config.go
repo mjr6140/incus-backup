@@ -22,6 +22,8 @@ func newRestoreCmd(stdout, stderr io.Writer) *cobra.Command {
     cmd.AddCommand(newRestoreConfigCmd(stdout, stderr))
     cmd.AddCommand(newRestoreInstanceCmd(stdout, stderr))
     cmd.AddCommand(newRestoreVolumeCmd(stdout, stderr))
+    cmd.AddCommand(newRestoreInstancesCmd(stdout, stderr))
+    cmd.AddCommand(newRestoreVolumesCmd(stdout, stderr))
     return cmd
 }
 

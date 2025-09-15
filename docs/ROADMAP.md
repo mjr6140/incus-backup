@@ -73,6 +73,11 @@ Snapshot-by-default behavior
   - Progress during import plus server-side status polling (Running → Success).
   - Tests: integration for standard restore, --replace, --target-name, --skip-existing.
 
+- [~] Bulk restore (instances, volumes)
+  - `restore instances [NAME ...]` restores all if unspecified, with single preview/confirmation.
+  - `restore volumes [POOL/NAME ...]` restores all if unspecified, with single preview/confirmation.
+  - Applies `--replace|--skip-existing` policies consistently across items.
+
 - [ ] Volume backup/restore (project-scoped)
   - `backup volumes` and `restore volume` with snapshot-by-default.
   - Paths: `volumes/<project>/<pool>/<name>/...`.
