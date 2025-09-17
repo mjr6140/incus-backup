@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	resticInstanceDataFilename      = "export.tar.xz"
+	resticInstanceDataFilename      = "export.tar"
 	resticInstanceManifestFilename  = "manifest.json"
 	resticInstanceChecksumsFilename = "checksums.txt"
+	resticCompressionNone           = "none"
 )
 
 // BackupInstanceRestic streams an instance export directly into a restic repository.
@@ -45,7 +46,7 @@ func BackupInstanceRestic(ctx context.Context, bin restic.BinaryInfo, repo strin
 		}()
 	}
 
-	export, err := client.ExportInstance(project, name, optimized, snapName, progressOut)
+	export, err := client.ExportInstance(project, name, optimized, snapName, resticCompressionNone, progressOut)
 	if err != nil {
 		return "", err
 	}

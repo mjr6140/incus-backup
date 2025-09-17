@@ -38,7 +38,7 @@ func TestCollectResticVerifyResults_InstanceOK(t *testing.T) {
 	restoreDump := cli.SetResticVerifyDumpForTest(func(_ context.Context, _ restic.BinaryInfo, _ string, snapshotID string, path string, w io.Writer, _ io.Writer) error {
 		switch snapshotID {
 		case "snap-data":
-			if path != "export.tar.xz" {
+			if path != "export.tar" {
 				t.Fatalf("unexpected data path %s", path)
 			}
 			_, err := w.Write(dataContent)
@@ -54,7 +54,7 @@ func TestCollectResticVerifyResults_InstanceOK(t *testing.T) {
 				t.Fatalf("unexpected checksum path %s", path)
 			}
 			sums := []string{
-				hexHash(dataContent) + "  export.tar.xz",
+				hexHash(dataContent) + "  export.tar",
 				hexHash(manifestContent) + "  manifest.json",
 			}
 			_, err := w.Write([]byte(strings.Join(sums, "\n") + "\n"))
@@ -84,7 +84,7 @@ func TestCollectResticVerifyResults_InstanceOK(t *testing.T) {
 	for _, f := range res.Files {
 		statuses[f.Name] = f.Status
 	}
-	if statuses["export.tar.xz"] != "ok" || statuses["manifest.json"] != "ok" || statuses["checksums.txt"] != "ok" {
+	if statuses["export.tar"] != "ok" || statuses["manifest.json"] != "ok" || statuses["checksums.txt"] != "ok" {
 		t.Fatalf("unexpected file statuses: %#v", statuses)
 	}
 }
@@ -109,13 +109,13 @@ func TestCollectResticVerifyResults_InstanceMismatch(t *testing.T) {
 	restoreDump := cli.SetResticVerifyDumpForTest(func(_ context.Context, _ restic.BinaryInfo, _ string, snapshotID string, path string, w io.Writer, _ io.Writer) error {
 		switch snapshotID {
 		case "snap-data":
-			if path != "export.tar.xz" {
+			if path != "export.tar" {
 				t.Fatalf("unexpected data path %s", path)
 			}
 			_, err := w.Write([]byte("data"))
 			return err
 		case "snap-checksums":
-			sums := []string{"deadbeef  export.tar.xz"}
+			sums := []string{"deadbeef  export.tar"}
 			_, err := w.Write([]byte(strings.Join(sums, "\n") + "\n"))
 			return err
 		default:
@@ -141,7 +141,7 @@ func TestCollectResticVerifyResults_InstanceMismatch(t *testing.T) {
 	}
 	foundMismatch := false
 	for _, f := range res.Files {
-		if f.Name == "export.tar.xz" && f.Status == "mismatch" {
+		if f.Name == "export.tar" && f.Status == "mismatch" {
 			foundMismatch = true
 		}
 	}

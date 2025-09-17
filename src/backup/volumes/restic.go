@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	resticVolumeDataFilename      = "volume.tar.xz"
+	resticVolumeDataFilename      = "volume.tar"
 	resticVolumeManifestFilename  = "manifest.json"
 	resticVolumeChecksumsFilename = "checksums.txt"
+	resticCompressionNone         = "none"
 )
 
 // BackupVolumeRestic streams a volume export into a restic repository.
@@ -45,7 +46,7 @@ func BackupVolumeRestic(ctx context.Context, bin restic.BinaryInfo, repo string,
 		}()
 	}
 
-	export, err := client.ExportVolume(project, pool, name, optimized, snapName, progressOut)
+	export, err := client.ExportVolume(project, pool, name, optimized, snapName, resticCompressionNone, progressOut)
 	if err != nil {
 		return "", err
 	}

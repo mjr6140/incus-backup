@@ -1,107 +1,109 @@
 package incusapi
 
 import "io"
+
 // Project models a minimal Incus project for our purposes.
 type Project struct {
-    Name   string
-    Config map[string]string
+	Name   string
+	Config map[string]string
 }
 
 // Profile mirrors the important fields of an Incus profile.
 type Profile struct {
-    Name        string
-    Description string
-    Config      map[string]string
-    Devices     map[string]map[string]string
+	Name        string
+	Description string
+	Config      map[string]string
+	Devices     map[string]map[string]string
 }
 
 // Network captures minimal managed network info.
 type Network struct {
-    Name        string
-    Description string
-    Managed     bool
-    Type        string
-    Config      map[string]string
+	Name        string
+	Description string
+	Managed     bool
+	Type        string
+	Config      map[string]string
 }
 
 // StoragePool captures minimal storage pool info.
 type StoragePool struct {
-    Name        string
-    Driver      string
-    Description string
-    Config      map[string]string
+	Name        string
+	Driver      string
+	Description string
+	Config      map[string]string
 }
 
 // Instance captures minimal instance info.
 type Instance struct {
-    Project string
-    Name    string
-    Type    string // container|virtual-machine
+	Project string
+	Name    string
+	Type    string // container|virtual-machine
 }
 
 // Volume captures minimal custom storage volume info.
 type Volume struct {
-    Project     string
-    Pool        string
-    Name        string
-    ContentType string // filesystem|block
+	Project     string
+	Pool        string
+	Name        string
+	ContentType string // filesystem|block
 }
 
 // ServerInfo exposes key server metadata we care about.
 type ServerInfo struct {
-    ServerVersion string
+	ServerVersion string
 }
 
 // Client is a narrow interface over the Incus API used by our app.
 // Keep it small and focused on what we actually need so it stays mockable.
 type Client interface {
-    // Server
-    Server() (ServerInfo, error)
+	// Server
+	Server() (ServerInfo, error)
 
-    // Projects
-    ListProjects() ([]Project, error)
-    CreateProject(name string, config map[string]string) error
-    DeleteProject(name string) error
-    UpdateProject(name string, config map[string]string) error
+	// Projects
+	ListProjects() ([]Project, error)
+	CreateProject(name string, config map[string]string) error
+	DeleteProject(name string) error
+	UpdateProject(name string, config map[string]string) error
 
-    // Profiles
-    ListProfiles() ([]Profile, error)
+	// Profiles
+	ListProfiles() ([]Profile, error)
 
-    // Networks
-    ListNetworks() ([]Network, error)
-    CreateNetwork(n Network) error
-    UpdateNetwork(n Network) error
-    DeleteNetwork(name string) error
+	// Networks
+	ListNetworks() ([]Network, error)
+	CreateNetwork(n Network) error
+	UpdateNetwork(n Network) error
+	DeleteNetwork(name string) error
 
-    // Storage pools
-    ListStoragePools() ([]StoragePool, error)
-    CreateStoragePool(p StoragePool) error
-    UpdateStoragePool(p StoragePool) error
-    DeleteStoragePool(name string) error
+	// Storage pools
+	ListStoragePools() ([]StoragePool, error)
+	CreateStoragePool(p StoragePool) error
+	UpdateStoragePool(p StoragePool) error
+	DeleteStoragePool(name string) error
 
-    // Instances
-    ListInstances(project string) ([]Instance, error)
-    // ExportInstance returns a tar stream of the instance export. If snapshot is non-empty,
-    // it should export from that snapshot. If optimized is true, use backend-optimized export.
-    ExportInstance(project, name string, optimized bool, snapshot string, progress io.Writer) (io.ReadCloser, error)
-    // ImportInstance creates/restores an instance from the given tar stream with optional target name.
-    // If progress is non-nil, server-side status updates may be written to it.
-    ImportInstance(project, targetName string, r io.Reader, progress io.Writer) error
+	// Instances
+	ListInstances(project string) ([]Instance, error)
+	// ExportInstance returns a tar stream of the instance export. If snapshot is non-empty,
+	// it should export from that snapshot. If optimized is true, use backend-optimized export.
+	// compression should be "" for the server default (usually xz) or "none" to disable compression.
+	ExportInstance(project, name string, optimized bool, snapshot string, compression string, progress io.Writer) (io.ReadCloser, error)
+	// ImportInstance creates/restores an instance from the given tar stream with optional target name.
+	// If progress is non-nil, server-side status updates may be written to it.
+	ImportInstance(project, targetName string, r io.Reader, progress io.Writer) error
 
-    // Instance lifecycle helpers
-    InstanceExists(project, name string) (bool, error)
-    StopInstance(project, name string, force bool) error
-    DeleteInstance(project, name string) error
-    // Snapshot lifecycle
-    CreateInstanceSnapshot(project, name, snapshot string) error
-    DeleteInstanceSnapshot(project, name, snapshot string) error
+	// Instance lifecycle helpers
+	InstanceExists(project, name string) (bool, error)
+	StopInstance(project, name string, force bool) error
+	DeleteInstance(project, name string) error
+	// Snapshot lifecycle
+	CreateInstanceSnapshot(project, name, snapshot string) error
+	DeleteInstanceSnapshot(project, name, snapshot string) error
 
-    // Volumes (custom)
-    ListCustomVolumes(project string) ([]Volume, error)
-    VolumeExists(project, pool, name string) (bool, error)
-    CreateVolumeSnapshot(project, pool, name, snapshot string) error
-    DeleteVolumeSnapshot(project, pool, name, snapshot string) error
-    ExportVolume(project, pool, name string, optimized bool, snapshot string, progress io.Writer) (io.ReadCloser, error)
-    ImportVolume(project, poolTarget, nameTarget string, r io.Reader, progress io.Writer) error
-    DeleteVolume(project, pool, name string) error
+	// Volumes (custom)
+	ListCustomVolumes(project string) ([]Volume, error)
+	VolumeExists(project, pool, name string) (bool, error)
+	CreateVolumeSnapshot(project, pool, name, snapshot string) error
+	DeleteVolumeSnapshot(project, pool, name, snapshot string) error
+	ExportVolume(project, pool, name string, optimized bool, snapshot string, compression string, progress io.Writer) (io.ReadCloser, error)
+	ImportVolume(project, poolTarget, nameTarget string, r io.Reader, progress io.Writer) error
+	DeleteVolume(project, pool, name string) error
 }

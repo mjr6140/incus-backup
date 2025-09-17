@@ -428,7 +428,7 @@ func instanceFilePath(_, _, _, file string) string { return file }
 
 func instancePartForFile(file string) string {
 	switch file {
-	case "export.tar.xz":
+	case "export.tar":
 		return "data"
 	case "manifest.json":
 		return "manifest"
@@ -443,7 +443,7 @@ func volumeFilePath(_, _, _, _, file string) string { return file }
 
 func volumePartForFile(file string) string {
 	switch file {
-	case "volume.tar.xz":
+	case "volume.tar":
 		return "data"
 	case "manifest.json":
 		return "manifest"
