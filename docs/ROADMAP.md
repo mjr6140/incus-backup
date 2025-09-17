@@ -157,10 +157,10 @@ Completed
 - CLI/tooling scaffolding plus streaming support for instances and volumes (backup + restore).
 - Config backup & restore streaming via restic, including CLI wiring and integration coverage for backup/apply flows.
 - Listing & selection UX backed by restic snapshots; CLI `list` now supports restic targets with table/JSON parity and tests (unit + integration).
+- Verify checksums for restic targets (instances, volumes, config) with per-file reporting and CLI integration tests.
 
 In Progress / Upcoming
-1) Verify & prune workflows
-   - Map `incus-backup verify` to `restic check` + manifest revalidation; report per-file statuses.
+1) Prune workflows
    - Implement `incus-backup prune` via `restic forget --prune`, including preview/confirmation flows for restic targets.
 
 2) Concurrency, locking, and observability

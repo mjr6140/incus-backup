@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"incus-backup/src/restic"
 	"incus-backup/src/target"
 )
 
@@ -37,45 +39,45 @@ func newVerifyCmd(stdout, stderr io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if tgt.Scheme == "restic" {
-				return resticNotImplemented(cmd)
-			}
-			if tgt.Scheme != "dir" {
-				return fmt.Errorf("verify: unsupported backend %s", tgt.Scheme)
-			}
-
-			if output == "json" {
-				// Collect then emit JSON to produce valid array output.
-				results, err := runVerify(tgt.DirPath, kind)
+			switch tgt.Scheme {
+			case "dir":
+				if output == "json" {
+					// Collect then emit JSON to produce valid array output.
+					results, err := runVerifyDir(tgt.DirPath, kind)
+					if err != nil {
+						return err
+					}
+					return encodeVerifyResultsJSON(stdout, results)
+				}
+				return runVerifyDirStream(stdout, tgt.DirPath, kind)
+			case "restic":
+				info, err := checkResticBinary(cmd, true)
 				if err != nil {
 					return err
 				}
-				enc := json.NewEncoder(stdout)
-				enc.SetIndent("", "  ")
-				return enc.Encode(results)
-			}
-			// Stream table output incrementally for faster feedback.
-			// Use fixed-width columns to avoid misalignment as we flush rows.
-			const (
-				wType = 8
-				wProj = 12
-				wPool = 12
-				wName = 18
-				wFP   = 16
-				wTS   = 16
-			)
-			headerFmt := fmt.Sprintf("%%-%ds %%-%ds %%-%ds %%-%ds %%-%ds %%-%ds %%s\n",
-				wType, wProj, wPool, wName, wFP, wTS)
-			rowFmt := headerFmt
-			fmt.Fprintf(stdout, headerFmt, "TYPE", "PROJECT", "POOL", "NAME", "FINGERPRINT", "TIMESTAMP", "STATUS")
-			err = runVerifyStreaming(tgt.DirPath, kind, func(r verifyResult) {
-				fmt.Fprintf(stdout, rowFmt,
-					safePad(r.Type), safePad(r.Project), safePad(r.Pool), safePad(r.Name), safePad(r.Fingerprint), safePad(r.Timestamp), r.Status)
-				for _, file := range r.Files {
-					fmt.Fprintf(stdout, "    - %s: %s\n", file.Name, renderFileDetail(file))
+				ctx := cmd.Context()
+				if ctx == nil {
+					ctx = context.Background()
 				}
-			})
-			return err
+				if err := restic.EnsureRepository(ctx, info, tgt.Value); err != nil {
+					return err
+				}
+				results, err := collectResticVerifyResults(ctx, info, tgt.Value, kind)
+				if err != nil {
+					return err
+				}
+				switch output {
+				case "json":
+					return encodeVerifyResultsJSON(stdout, results)
+				case "table", "":
+					printVerifyTable(stdout, results)
+					return nil
+				default:
+					return fmt.Errorf("unsupported --output: %s", output)
+				}
+			default:
+				return fmt.Errorf("verify: unsupported backend %s", tgt.Scheme)
+			}
 		},
 	}
 	cmd.Flags().String("target", "", "Backend target URI (e.g., dir:/path)")
@@ -139,6 +141,60 @@ func renderFileDetail(f verifyFileResult) string {
 // callers to print progress incrementally.
 func runVerifyStreaming(root, kind string, cb func(verifyResult)) error {
 	return walkSnapshots(root, kind, cb)
+}
+
+func runVerifyDir(root, kind string) ([]verifyResult, error) {
+	return runVerify(root, kind)
+}
+
+func runVerifyDirStream(stdout io.Writer, root, kind string) error {
+	const (
+		wType = 8
+		wProj = 12
+		wPool = 12
+		wName = 18
+		wFP   = 16
+		wTS   = 16
+	)
+	headerFmt := fmt.Sprintf("%%-%ds %%-%ds %%-%ds %%-%ds %%-%ds %%-%ds %%s\n",
+		wType, wProj, wPool, wName, wFP, wTS)
+	rowFmt := headerFmt
+	fmt.Fprintf(stdout, headerFmt, "TYPE", "PROJECT", "POOL", "NAME", "FINGERPRINT", "TIMESTAMP", "STATUS")
+	return runVerifyStreaming(root, kind, func(r verifyResult) {
+		printVerifyRow(stdout, rowFmt, r)
+	})
+}
+
+func printVerifyTable(stdout io.Writer, results []verifyResult) {
+	const (
+		wType = 8
+		wProj = 12
+		wPool = 12
+		wName = 18
+		wFP   = 16
+		wTS   = 16
+	)
+	headerFmt := fmt.Sprintf("%%-%ds %%-%ds %%-%ds %%-%ds %%-%ds %%-%ds %%s\n",
+		wType, wProj, wPool, wName, wFP, wTS)
+	rowFmt := headerFmt
+	fmt.Fprintf(stdout, headerFmt, "TYPE", "PROJECT", "POOL", "NAME", "FINGERPRINT", "TIMESTAMP", "STATUS")
+	for _, r := range results {
+		printVerifyRow(stdout, rowFmt, r)
+	}
+}
+
+func printVerifyRow(w io.Writer, rowFmt string, r verifyResult) {
+	fmt.Fprintf(w, rowFmt,
+		safePad(r.Type), safePad(r.Project), safePad(r.Pool), safePad(r.Name), safePad(r.Fingerprint), safePad(r.Timestamp), r.Status)
+	for _, file := range r.Files {
+		fmt.Fprintf(w, "    - %s: %s\n", file.Name, renderFileDetail(file))
+	}
+}
+
+func encodeVerifyResultsJSON(out io.Writer, results []verifyResult) error {
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(results)
 }
 
 func walkSnapshots(root, kind string, cb func(verifyResult)) error {
