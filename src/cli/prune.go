@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"incus-backup/src/restic"
 	"incus-backup/src/safety"
 	"incus-backup/src/target"
 )
@@ -38,39 +40,69 @@ func newPruneCmd(stdout, stderr io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if tgt.Scheme == "restic" {
-				return resticNotImplemented(cmd)
-			}
-			if tgt.Scheme != "dir" {
+			switch tgt.Scheme {
+			case "dir":
+				toDelete, err := planPrune(tgt.DirPath, kind, keep)
+				if err != nil {
+					return err
+				}
+
+				// Preview
+				tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+				fmt.Fprintln(tw, "TYPE\tPROJECT\tPOOL\tNAME\tFINGERPRINT\tTIMESTAMP\tACTION")
+				for _, p := range toDelete {
+					fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\tdelete\n", p.Type, p.Project, p.Pool, p.Name, p.Fingerprint, p.Timestamp)
+				}
+				_ = tw.Flush()
+
+				opts := getSafetyOptions(cmd)
+				if opts.DryRun || len(toDelete) == 0 {
+					return nil
+				}
+				ok, err := safety.Confirm(opts, os.Stdin, stdout, fmt.Sprintf("Delete %d snapshots?", len(toDelete)))
+				if err != nil || !ok {
+					return err
+				}
+				for _, p := range toDelete {
+					_ = os.RemoveAll(p.Path)
+				}
+				return nil
+			case "restic":
+				info, err := checkResticBinary(cmd, true)
+				if err != nil {
+					return err
+				}
+				ctx := cmd.Context()
+				if ctx == nil {
+					ctx = context.Background()
+				}
+				if err := restic.EnsureRepository(ctx, info, tgt.Value); err != nil {
+					return err
+				}
+				resticCandidates, err := planResticPrune(ctx, info, tgt.Value, kind, keep)
+				if err != nil {
+					return err
+				}
+				renderResticPrunePreview(stdout, resticCandidates)
+				opts := getSafetyOptions(cmd)
+				if opts.DryRun || len(resticCandidates) == 0 {
+					return nil
+				}
+				if !(opts.Yes || opts.Force) {
+					ok, err := safety.Confirm(opts, os.Stdin, stdout, fmt.Sprintf("Delete %d restic snapshot sets?", len(resticCandidates)))
+					if err != nil || !ok {
+						return err
+					}
+				}
+				ids := collectSnapshotIDs(resticCandidates)
+				if err := forgetSnapshotsFunc(ctx, info, tgt.Value, ids, true); err != nil {
+					return err
+				}
+				fmt.Fprintf(stdout, "Deleted %d snapshot sets\n", len(resticCandidates))
+				return nil
+			default:
 				return fmt.Errorf("prune: unsupported backend %s", tgt.Scheme)
 			}
-
-			toDelete, err := planPrune(tgt.DirPath, kind, keep)
-			if err != nil {
-				return err
-			}
-
-			// Preview
-			tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "TYPE\tPROJECT\tPOOL\tNAME\tFINGERPRINT\tTIMESTAMP\tACTION")
-			for _, p := range toDelete {
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\tdelete\n", p.Type, p.Project, p.Pool, p.Name, p.Fingerprint, p.Timestamp)
-			}
-			_ = tw.Flush()
-
-			opts := getSafetyOptions(cmd)
-			if opts.DryRun || len(toDelete) == 0 {
-				return nil
-			}
-			ok, err := safety.Confirm(opts, os.Stdin, stdout, fmt.Sprintf("Delete %d snapshots?", len(toDelete)))
-			if err != nil || !ok {
-				return err
-			}
-			// Apply deletions
-			for _, p := range toDelete {
-				_ = os.RemoveAll(p.Path)
-			}
-			return nil
 		},
 	}
 	cmd.Flags().String("target", "", "Backend target URI (e.g., dir:/path)")

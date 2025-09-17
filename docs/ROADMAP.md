@@ -158,14 +158,12 @@ Completed
 - Config backup & restore streaming via restic, including CLI wiring and integration coverage for backup/apply flows.
 - Listing & selection UX backed by restic snapshots; CLI `list` now supports restic targets with table/JSON parity and tests (unit + integration).
 - Verify checksums for restic targets (instances, volumes, config) with per-file reporting and CLI integration tests.
+- Prune retention for restic targets using `restic forget --prune`, including preview/confirmation flows and automated coverage.
 
 In Progress / Upcoming
-1) Prune workflows
-   - Implement `incus-backup prune` via `restic forget --prune`, including preview/confirmation flows for restic targets.
-
-2) Concurrency, locking, and observability
+1) Concurrency, locking, and observability
    - Serialize restic invocations, handle stale locks, and keep streaming progress/log output consistent.
 
-3) Testing & release
+2) Testing & release
    - Extend integration coverage to verify/prune and remaining restic UX.
    - Update README/docs with restic usage, credentials, and troubleshooting once features stabilize.

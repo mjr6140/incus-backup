@@ -94,6 +94,24 @@ func Dump(ctx context.Context, bin BinaryInfo, repo string, snapshotID string, p
 	return nil
 }
 
+// ForgetSnapshots removes the specified snapshot IDs from the repository. When
+// prune is true the command also performs `restic forget --prune` to reclaim
+// storage immediately.
+func ForgetSnapshots(ctx context.Context, bin BinaryInfo, repo string, snapshotIDs []string, prune bool) error {
+	if len(snapshotIDs) == 0 {
+		return nil
+	}
+	args := []string{"forget"}
+	if prune {
+		args = append(args, "--prune")
+	}
+	args = append(args, snapshotIDs...)
+	if _, stderr, err := runCommand(ctx, bin, repo, args, nil); err != nil {
+		return fmt.Errorf("restic: forget snapshots: %w: %s", err, stderr)
+	}
+	return nil
+}
+
 // Snapshot represents a restic snapshot as returned by `restic snapshots --json`.
 type Snapshot struct {
 	ID      string    `json:"id"`
