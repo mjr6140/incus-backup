@@ -151,25 +151,55 @@ Open questions
 - Import portability with `--optimized`: likely keep optimized=false by default
   for portability; make optimized opt-in due to driver constraints.
 
-Implementation plan
-1) Backend scaffolding
-   - Add `restic` backend implementing StorageBackend interface with feature
-     flags for `supportsStream=true`.
-   - Detect restic, parse repo URI, initialize repo if needed.
-2) Instances (export/import via stdin/stdout)
-   - Set CompressionAlgorithm="none"; stream export → restic `backup --stdin`
-     with tags. Stream restore back into `CreateInstanceFromBackup`.
-3) Volumes (export/import via stdin/stdout)
-   - Same as instances using volume backup APIs; ensure uncompressed streams.
-4) Config
-   - Store `projects.json`, `profiles.json`, `networks.json`, `storage_pools.json`
-     as small files in restic with tags; keep manifest and checksums.
-5) Listing + preview
-   - Implement list by querying restic snapshots with tag filters; compute
-     latest per resource.
-6) Verify + prune
-   - Wire `verify` to `restic check`; implement `prune` via `restic forget` and
-     policies mapped from CLI.
-7) Integration tests
-   - Install restic in the container harness; run local repo tests (no network).
-   - Roundtrip instance/volume and config with restic backend.
+Implementation checklist (Restic backend)
+1) Baseline decisions & validation
+   - Require `restic >= 0.18.0`; call `restic version`, warn on mismatch, and prompt the user before continuing when older.
+   - Lock in streaming via `restic backup --stdin`; no staging of temporary files.
+   - Decide tag schema (`type=instance|volume|config`, project, pool, name, timestamp, schema version) and canonical snapshot naming.
+   - Define how restic credentials are supplied (password env vars or `--password-file`) and how errors are surfaced.
+   - Choose progress strategy (default to streaming restic stdout/stderr; optionally parse `--json` later).
+
+2) Backend scaffolding
+   - Create a `restic` implementation of the storage backend interface with capability flags (`supportsStream=true`, `supportsVerify=true`).
+   - Parse `restic:` URIs (local repo paths and key/value options), normalize repo paths, and auto-initialize repositories when missing.
+   - Detect restic binary location, enforce version check, and convert failures into actionable CLI errors.
+   - Centralize restic process execution helper (context cancellation, env injection, stdout/stderr capture, log streaming).
+
+3) Instance backup/restore pipeline
+   - During backup: snapshot instance (unless `--no-snapshot`), export portable tar, stream into `restic backup --stdin --stdin-filename instances/<project>/<name>/<ts>.tar`, apply metadata tags, and store manifest/checksum alongside (second tiny snapshot or metadata store).
+   - During restore: resolve desired snapshot via tags/filters, stream back via `restic dump` (or `restore --target -`) directly into Incus import, honoring `--replace`, `--skip-existing`, `--target-name`, and snapshot lifecycle.
+   - Ensure errors propagate with context (restic failures, Incus import failures) and clean up temporary state.
+
+4) Volume backup/restore pipeline
+   - Mirror instance logic for custom volumes: snapshot/export portable tar, stream into restic with pool/name tags, and capture manifests.
+   - On restore, stream snapshot back into Incus volume import respecting `--replace`, `--skip-existing`, and target name flags.
+   - Support optional `--optimized` by toggling Incus export parameters while documenting portability caveats.
+
+5) Config backup/restore
+   - Collect config artifacts (`projects.json`, `profiles.json`, `networks.json`, `storage_pools.json`, manifest, checksums) and stream them into restic with deterministic filenames (e.g., `config/<timestamp>/<file>`).
+   - Update restore preview/apply to read config data from restic (latest or requested version), run diff/apply with existing safety flags (`--apply`, `--force`), and maintain checksum verification.
+
+6) Listing & selection UX
+   - Implement `restic` backend list/readers by calling `restic snapshots --json`, grouping snapshots by resource, and selecting the latest unless `--version` supplied.
+   - Expose table/json output formats consistent with directory backend, including filters for names, fingerprints, and types.
+   - Ensure `backup list images/config/...` works with restic snapshot metadata.
+
+7) Verify & prune workflows
+   - Map `incus-backup verify` to `restic check` (full or `--read-data-subset`), then iterate manifests in restic to compute per-file status identical to directory backend.
+   - Translate prune policies into `restic forget --prune`; produce preview tables of affected snapshots before confirmation (respect `--dry-run` and `--force`).
+   - Integrate confirmation gating so restic operations cannot proceed without explicit consent when warnings (e.g., version mismatch) are present.
+
+8) Concurrency, locking, and observability
+   - Serialize restic invocations to avoid repo lock contention while allowing Incus operations to run concurrently.
+   - Surface restic stdout/stderr live in CLI output; consider optional JSON parsing for richer progress feedback.
+   - Handle repo unlock/retry logic if restic reports a stale lock.
+
+9) Testing & tooling updates
+   - Extend `scripts/test_integration_container.sh` to install restic ≥ 0.18.0 and export necessary env vars/password files for tests.
+   - Add integration coverage: instance/volume/config backup+restore round-trips, list filtering, verify mismatch detection, prune behaviour, and version warning path.
+   - Introduce unit tests for restic backend helpers (URI parsing, command construction, tag mapping).
+
+10) Documentation & release readiness
+    - Update README and docs to describe restic backend usage, credential expectations, retention guidance, and troubleshooting (e.g., repo corruption, password mistakes).
+    - Capture operational notes: recommended restic version, warning prompt behaviour, how to inspect restic logs, and migration steps from directory backend.
+    - Announce feature status in ROADMAP milestones once implementation stabilizes.
