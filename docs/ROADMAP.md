@@ -152,59 +152,20 @@ Open questions
   for portability; make optimized opt-in due to driver constraints.
 
 Implementation checklist (Restic backend)
-1) Baseline decisions & validation
-   - Require `restic >= 0.18.0`; call `restic version`, warn on mismatch, and prompt the user before continuing when older.
-   - Lock in streaming via `restic backup --stdin`; no staging of temporary files.
-   - Decide tag schema (`type=instance|volume|config`, project, pool, name, timestamp, schema version) and canonical snapshot naming.
-   - Define how restic credentials are supplied (password env vars or `--password-file`) and how errors are surfaced.
-   - Choose progress strategy (default to streaming restic stdout/stderr; optionally parse `--json` later).
+Completed
+- Baseline decisions, binary detection, and streaming helpers for `restic backup --stdin`.
+- CLI/tooling scaffolding plus streaming support for instances and volumes (backup + restore).
+- Config backup & restore streaming via restic, including CLI wiring and integration coverage for backup/apply flows.
+- Listing & selection UX backed by restic snapshots; CLI `list` now supports restic targets with table/JSON parity and tests (unit + integration).
 
-2) Backend scaffolding
-   - Create a `restic` implementation of the storage backend interface with capability flags (`supportsStream=true`, `supportsVerify=true`).
-   - Parse `restic:` URIs (local repo paths and key/value options), normalize repo paths, and auto-initialize repositories when missing.
-   - Detect restic binary location, enforce version check, and convert failures into actionable CLI errors.
-   - Centralize restic process execution helper (context cancellation, env injection, stdout/stderr capture, log streaming).
+In Progress / Upcoming
+1) Verify & prune workflows
+   - Map `incus-backup verify` to `restic check` + manifest revalidation; report per-file statuses.
+   - Implement `incus-backup prune` via `restic forget --prune`, including preview/confirmation flows for restic targets.
 
-3) Integration tooling groundwork
-   - Update `scripts/test_integration_container.sh` to install restic ≥ 0.18.0, configure password env vars/files, and expose repo cache directories.
-   - Add CI hooks or local instructions so restic-based integration tests are runnable from the start of implementation.
-   - Lay down shared test helpers/fixtures for creating restic repos, seeding/incus test data, and cleaning up between runs.
+2) Concurrency, locking, and observability
+   - Serialize restic invocations, handle stale locks, and keep streaming progress/log output consistent.
 
-4) Instance backup/restore pipeline
-   - During backup: snapshot instance (unless `--no-snapshot`), export portable tar, stream into `restic backup --stdin --stdin-filename instances/<project>/<name>/<ts>.tar`, apply metadata tags, and store manifest/checksum alongside (second tiny snapshot or metadata store).
-   - During restore: resolve desired snapshot via tags/filters, stream back via `restic dump` (or `restore --target -`) directly into Incus import, honoring `--replace`, `--skip-existing`, `--target-name`, and snapshot lifecycle.
-   - Ensure errors propagate with context (restic failures, Incus import failures) and clean up temporary state.
-
-5) Volume backup/restore pipeline
-   - Mirror instance logic for custom volumes: snapshot/export portable tar, stream into restic with pool/name tags, and capture manifests.
-   - On restore, stream snapshot back into Incus volume import respecting `--replace`, `--skip-existing`, and target name flags.
-   - Support optional `--optimized` by toggling Incus export parameters while documenting portability caveats.
-
-6) Config backup/restore
-   - Collect config artifacts (`projects.json`, `profiles.json`, `networks.json`, `storage_pools.json`, manifest, checksums) and stream them into restic with deterministic filenames (e.g., `config/<timestamp>/<file>`).
-   - Update restore preview/apply to read config data from restic (latest or requested version), run diff/apply with existing safety flags (`--apply`, `--force`), and maintain checksum verification.
-
-7) Listing & selection UX
-   - Implement `restic` backend list/readers by calling `restic snapshots --json`, grouping snapshots by resource, and selecting the latest unless `--version` supplied.
-   - Expose table/json output formats consistent with directory backend, including filters for names, fingerprints, and types.
-   - Ensure `backup list images/config/...` works with restic snapshot metadata.
-
-8) Verify & prune workflows
-   - Map `incus-backup verify` to `restic check` (full or `--read-data-subset`), then iterate manifests in restic to compute per-file status identical to directory backend.
-   - Translate prune policies into `restic forget --prune`; produce preview tables of affected snapshots before confirmation (respect `--dry-run` and `--force`).
-   - Integrate confirmation gating so restic operations cannot proceed without explicit consent when warnings (e.g., version mismatch) are present.
-
-9) Concurrency, locking, and observability
-   - Serialize restic invocations to avoid repo lock contention while allowing Incus operations to run concurrently.
-   - Surface restic stdout/stderr live in CLI output; consider optional JSON parsing for richer progress feedback.
-   - Handle repo unlock/retry logic if restic reports a stale lock.
-
-10) Testing & step-level validation
-    - Add integration coverage incrementally as features land: instance/volume/config round-trips, list filtering, verify mismatch detection, prune behaviour, version-warning prompt.
-    - Introduce unit tests for restic backend helpers (URI parsing, command construction, tag mapping) alongside the relevant features.
-    - Ensure regression tests exist for restic process orchestration (log streaming, locking) before proceeding to release hardening.
-
-11) Documentation & release readiness
-    - Update README and docs to describe restic backend usage, credential expectations, retention guidance, and troubleshooting (e.g., repo corruption, password mistakes).
-    - Capture operational notes: recommended restic version, warning prompt behaviour, how to inspect restic logs, and migration steps from directory backend.
-    - Announce feature status in ROADMAP milestones once implementation stabilizes.
+3) Testing & release
+   - Extend integration coverage to verify/prune and remaining restic UX.
+   - Update README/docs with restic usage, credentials, and troubleshooting once features stabilize.

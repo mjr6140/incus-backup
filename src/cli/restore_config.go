@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,15 +18,12 @@ import (
 	"incus-backup/src/target"
 )
 
-func newRestoreCmd(stdout, stderr io.Writer) *cobra.Command {
-	cmd := &cobra.Command{Use: "restore", Short: "Restore from backups"}
-	cmd.AddCommand(newRestoreAllCmd(stdout, stderr))
-	cmd.AddCommand(newRestoreConfigCmd(stdout, stderr))
-	cmd.AddCommand(newRestoreInstanceCmd(stdout, stderr))
-	cmd.AddCommand(newRestoreVolumeCmd(stdout, stderr))
-	cmd.AddCommand(newRestoreInstancesCmd(stdout, stderr))
-	cmd.AddCommand(newRestoreVolumesCmd(stdout, stderr))
-	return cmd
+type configSnapshot struct {
+	Timestamp    string
+	Projects     []incusapi.Project
+	Profiles     []incusapi.Profile
+	Networks     []incusapi.Network
+	StoragePools []incusapi.StoragePool
 }
 
 func newRestoreConfigCmd(stdout, stderr io.Writer) *cobra.Command {
@@ -43,18 +41,8 @@ func newRestoreConfigCmd(stdout, stderr io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if tgt.Scheme == "restic" {
-				return resticNotImplemented(cmd)
-			}
-			if tgt.Scheme != "dir" {
-				return fmt.Errorf("unsupported backend: %s", tgt.Scheme)
-			}
 
-			snapDir, err := resolveConfigSnapshotDir(tgt, version)
-			if err != nil {
-				return err
-			}
-			desiredProjects, err := loadProjects(filepath.Join(snapDir, "projects.json"))
+			snap, err := loadConfigSnapshot(cmd, tgt, version)
 			if err != nil {
 				return err
 			}
@@ -63,20 +51,24 @@ func newRestoreConfigCmd(stdout, stderr io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			current, err := client.ListProjects()
+			currentProjects, err := client.ListProjects()
 			if err != nil {
 				return err
 			}
+			projectPlan := cfg.BuildProjectsPlan(currentProjects, snap.Projects)
 
-			plan := cfg.BuildProjectsPlan(current, desiredProjects)
-			// Also compute networks and storage pools plans
-			desiredNetworks, _ := loadNetworks(filepath.Join(snapDir, "networks.json"))
-			currentNetworks, _ := client.ListNetworks()
-			nplan := cfg.BuildNetworksPlan(currentNetworks, desiredNetworks)
+			currentNetworks, err := client.ListNetworks()
+			if err != nil {
+				return err
+			}
+			networkPlan := cfg.BuildNetworksPlan(currentNetworks, snap.Networks)
 
-			desiredPools, _ := loadStoragePools(filepath.Join(snapDir, "storage_pools.json"))
-			currentPools, _ := client.ListStoragePools()
-			splan := cfg.BuildStoragePoolsPlan(currentPools, desiredPools)
+			currentPools, err := client.ListStoragePools()
+			if err != nil {
+				return err
+			}
+			poolPlan := cfg.BuildStoragePoolsPlan(currentPools, snap.StoragePools)
+
 			if !apply {
 				switch output {
 				case "json":
@@ -86,35 +78,34 @@ func newRestoreConfigCmd(stdout, stderr io.Writer) *cobra.Command {
 						Projects     cfg.ProjectPlan     `json:"projects"`
 						Networks     cfg.NetworkPlan     `json:"networks"`
 						StoragePools cfg.StoragePoolPlan `json:"storage_pools"`
-					}{plan, nplan, splan})
+					}{projectPlan, networkPlan, poolPlan})
 				case "table", "":
-					renderProjectsPlan(stdout, plan)
-					renderNetworksPlan(stdout, nplan)
-					renderStoragePoolsPlan(stdout, splan)
+					renderProjectsPlan(stdout, projectPlan)
+					renderNetworksPlan(stdout, networkPlan)
+					renderStoragePoolsPlan(stdout, poolPlan)
 					return nil
 				default:
 					return fmt.Errorf("unsupported --output: %s", output)
 				}
 			}
-			// Apply mode
+
 			opts := getSafetyOptions(cmd)
 			if opts.DryRun {
-				// print preview then exit
-				renderProjectsPlan(stdout, plan)
-				renderNetworksPlan(stdout, nplan)
-				renderStoragePoolsPlan(stdout, splan)
+				renderProjectsPlan(stdout, projectPlan)
+				renderNetworksPlan(stdout, networkPlan)
+				renderStoragePoolsPlan(stdout, poolPlan)
 				return nil
 			}
-			// Always echo a table-style preview before confirmation
-			renderProjectsPlan(stdout, plan)
-			renderNetworksPlan(stdout, nplan)
-			renderStoragePoolsPlan(stdout, splan)
-			// Prompt once with summary unless --yes
+
+			renderProjectsPlan(stdout, projectPlan)
+			renderNetworksPlan(stdout, networkPlan)
+			renderStoragePoolsPlan(stdout, poolPlan)
+
 			var buf strings.Builder
 			buf.WriteString("Apply config changes? (networks/storage pools may disrupt running workloads)\n")
-			buf.WriteString(fmt.Sprintf("Projects => Create: %d, Update: %d, Delete: %d\n", len(plan.ToCreate), len(plan.ToUpdate), len(plan.ToDelete)))
-			buf.WriteString(fmt.Sprintf("Networks => Create: %d, Update: %d, Delete: %d\n", len(nplan.ToCreate), len(nplan.ToUpdate), len(nplan.ToDelete)))
-			buf.WriteString(fmt.Sprintf("Storage Pools => Create: %d, Update: %d, Delete: %d\n", len(splan.ToCreate), len(splan.ToUpdate), len(splan.ToDelete)))
+			buf.WriteString(fmt.Sprintf("Projects => Create: %d, Update: %d, Delete: %d\n", len(projectPlan.ToCreate), len(projectPlan.ToUpdate), len(projectPlan.ToDelete)))
+			buf.WriteString(fmt.Sprintf("Networks => Create: %d, Update: %d, Delete: %d\n", len(networkPlan.ToCreate), len(networkPlan.ToUpdate), len(networkPlan.ToDelete)))
+			buf.WriteString(fmt.Sprintf("Storage Pools => Create: %d, Update: %d, Delete: %d\n", len(poolPlan.ToCreate), len(poolPlan.ToUpdate), len(poolPlan.ToDelete)))
 			ok, err := safety.Confirm(opts, os.Stdin, stdout, buf.String())
 			if err != nil {
 				return err
@@ -122,19 +113,16 @@ func newRestoreConfigCmd(stdout, stderr io.Writer) *cobra.Command {
 			if !ok {
 				return nil
 			}
-			// Apply in order: storage pools, networks, projects
-			// Only delete networks/pools when --force is set.
-			// Print per-resource progress lines for consistency.
-			// Storage pools
+
 			spCreated, spUpdated, spDeleted := 0, 0, 0
-			for _, p := range splan.ToCreate {
+			for _, p := range poolPlan.ToCreate {
 				fmt.Fprintf(stdout, "[storage] create %s\n", p.Name)
 				if err := client.CreateStoragePool(p); err != nil {
 					return err
 				}
 				spCreated++
 			}
-			for _, u := range splan.ToUpdate {
+			for _, u := range poolPlan.ToUpdate {
 				fmt.Fprintf(stdout, "[storage] update %s\n", u.Name)
 				if err := client.UpdateStoragePool(incusapi.StoragePool{Name: u.Name, Config: u.DesiredConf}); err != nil {
 					return err
@@ -142,7 +130,7 @@ func newRestoreConfigCmd(stdout, stderr io.Writer) *cobra.Command {
 				spUpdated++
 			}
 			if opts.Force {
-				for _, p := range splan.ToDelete {
+				for _, p := range poolPlan.ToDelete {
 					fmt.Fprintf(stdout, "[storage] delete %s\n", p.Name)
 					if err := client.DeleteStoragePool(p.Name); err != nil {
 						return err
@@ -152,16 +140,15 @@ func newRestoreConfigCmd(stdout, stderr io.Writer) *cobra.Command {
 			}
 			fmt.Fprintf(stdout, "storage_pools: created=%d updated=%d deleted=%d\n", spCreated, spUpdated, spDeleted)
 
-			// Networks
 			netCreated, netUpdated, netDeleted := 0, 0, 0
-			for _, n := range nplan.ToCreate {
+			for _, n := range networkPlan.ToCreate {
 				fmt.Fprintf(stdout, "[networks] create %s\n", n.Name)
 				if err := client.CreateNetwork(n); err != nil {
 					return err
 				}
 				netCreated++
 			}
-			for _, u := range nplan.ToUpdate {
+			for _, u := range networkPlan.ToUpdate {
 				fmt.Fprintf(stdout, "[networks] update %s\n", u.Name)
 				if err := client.UpdateNetwork(incusapi.Network{Name: u.Name, Config: u.DesiredConf}); err != nil {
 					return err
@@ -169,7 +156,7 @@ func newRestoreConfigCmd(stdout, stderr io.Writer) *cobra.Command {
 				netUpdated++
 			}
 			if opts.Force {
-				for _, n := range nplan.ToDelete {
+				for _, n := range networkPlan.ToDelete {
 					fmt.Fprintf(stdout, "[networks] delete %s\n", n.Name)
 					if err := client.DeleteNetwork(n.Name); err != nil {
 						return err
@@ -179,23 +166,22 @@ func newRestoreConfigCmd(stdout, stderr io.Writer) *cobra.Command {
 			}
 			fmt.Fprintf(stdout, "networks: created=%d updated=%d deleted=%d\n", netCreated, netUpdated, netDeleted)
 
-			// Projects
 			prCreated, prUpdated, prDeleted := 0, 0, 0
-			for _, p := range plan.ToCreate {
+			for _, p := range projectPlan.ToCreate {
 				fmt.Fprintf(stdout, "[projects] create %s\n", p.Name)
 				if err := client.CreateProject(p.Name, p.Config); err != nil {
 					return err
 				}
 				prCreated++
 			}
-			for _, u := range plan.ToUpdate {
+			for _, u := range projectPlan.ToUpdate {
 				fmt.Fprintf(stdout, "[projects] update %s\n", u.Name)
 				if err := client.UpdateProject(u.Name, u.Desired); err != nil {
 					return err
 				}
 				prUpdated++
 			}
-			for _, p := range plan.ToDelete {
+			for _, p := range projectPlan.ToDelete {
 				fmt.Fprintf(stdout, "[projects] delete %s\n", p.Name)
 				if err := client.DeleteProject(p.Name); err != nil {
 					return err
@@ -213,20 +199,78 @@ func newRestoreConfigCmd(stdout, stderr io.Writer) *cobra.Command {
 	return cmd
 }
 
+func loadConfigSnapshot(cmd *cobra.Command, tgt target.Target, version string) (configSnapshot, error) {
+	switch tgt.Scheme {
+	case "dir":
+		dir, err := resolveConfigSnapshotDir(tgt, version)
+		if err != nil {
+			return configSnapshot{}, err
+		}
+		return loadConfigSnapshotDir(dir)
+	case "restic":
+		info, err := checkResticBinary(cmd, true)
+		if err != nil {
+			return configSnapshot{}, err
+		}
+		ctx := cmd.Context()
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		data, err := cfg.LoadSnapshotRestic(ctx, info, tgt.Value, version)
+		if err != nil {
+			return configSnapshot{}, err
+		}
+		return configSnapshot{
+			Timestamp:    data.Timestamp,
+			Projects:     data.Projects,
+			Profiles:     data.Profiles,
+			Networks:     data.Networks,
+			StoragePools: data.StoragePools,
+		}, nil
+	default:
+		return configSnapshot{}, fmt.Errorf("unsupported backend: %s", tgt.Scheme)
+	}
+}
+
+func loadConfigSnapshotDir(dir string) (configSnapshot, error) {
+	projects, err := loadProjects(filepath.Join(dir, "projects.json"))
+	if err != nil {
+		return configSnapshot{}, err
+	}
+	profiles, err := loadProfiles(filepath.Join(dir, "profiles.json"))
+	if err != nil {
+		return configSnapshot{}, err
+	}
+	networks, err := loadNetworks(filepath.Join(dir, "networks.json"))
+	if err != nil {
+		return configSnapshot{}, err
+	}
+	pools, err := loadStoragePools(filepath.Join(dir, "storage_pools.json"))
+	if err != nil {
+		return configSnapshot{}, err
+	}
+	return configSnapshot{
+		Timestamp:    filepath.Base(dir),
+		Projects:     projects,
+		Profiles:     profiles,
+		Networks:     networks,
+		StoragePools: pools,
+	}, nil
+}
+
 func resolveConfigSnapshotDir(tgt target.Target, version string) (string, error) {
 	base := filepath.Join(tgt.DirPath, "config")
 	if version != "" {
 		return filepath.Join(base, version), nil
 	}
-	// pick latest lexicographically
 	entries, err := os.ReadDir(base)
 	if err != nil {
 		return "", err
 	}
 	var names []string
-	for _, e := range entries {
-		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
-			names = append(names, e.Name())
+	for _, entry := range entries {
+		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
+			names = append(names, entry.Name())
 		}
 	}
 	if len(names) == 0 {
@@ -234,42 +278,6 @@ func resolveConfigSnapshotDir(tgt target.Target, version string) (string, error)
 	}
 	sort.Strings(names)
 	return filepath.Join(base, names[len(names)-1]), nil
-}
-
-func loadProjects(path string) ([]incusapi.Project, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var out []incusapi.Project
-	if err := json.Unmarshal(b, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func loadNetworks(path string) ([]incusapi.Network, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var out []incusapi.Network
-	if err := json.Unmarshal(b, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func loadStoragePools(path string) ([]incusapi.StoragePool, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var out []incusapi.StoragePool
-	if err := json.Unmarshal(b, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func renderProjectsPlan(w io.Writer, p cfg.ProjectPlan) {
@@ -318,4 +326,52 @@ func renderStoragePoolsPlan(w io.Writer, p cfg.StoragePoolPlan) {
 	for _, d := range p.ToDelete {
 		fmt.Fprintf(w, "  - %s\n", d.Name)
 	}
+}
+
+func loadProjects(path string) ([]incusapi.Project, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var out []incusapi.Project
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func loadProfiles(path string) ([]incusapi.Profile, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var out []incusapi.Profile
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func loadNetworks(path string) ([]incusapi.Network, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var out []incusapi.Network
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func loadStoragePools(path string) ([]incusapi.StoragePool, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var out []incusapi.StoragePool
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }

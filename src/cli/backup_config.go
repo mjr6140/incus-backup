@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
@@ -34,16 +35,25 @@ func newBackupConfigCmd(stdout, stderr io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			client, err := incusapi.ConnectLocal()
+			if err != nil {
+				return err
+			}
 			switch tgt.Scheme {
 			case "dir":
-				client, err := incusapi.ConnectLocal()
-				if err != nil {
-					return err
-				}
 				_, err = cfg.BackupAll(client, tgt.DirPath, time.Now())
 				return err
 			case "restic":
-				return resticNotImplemented(cmd)
+				info, err := checkResticBinary(cmd, true)
+				if err != nil {
+					return err
+				}
+				ctx := cmd.Context()
+				if ctx == nil {
+					ctx = context.Background()
+				}
+				_, err = cfg.BackupAllRestic(ctx, info, tgt.Value, client, time.Now(), stdout)
+				return err
 			default:
 				return fmt.Errorf("unsupported backend: %s", tgt.Scheme)
 			}

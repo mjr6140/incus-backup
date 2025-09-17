@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 
 	"incus-backup/src/backend"
 	dir "incus-backup/src/backend/directory"
+	backendrestic "incus-backup/src/backend/restic"
+	"incus-backup/src/restic"
 	"incus-backup/src/target"
 )
 
@@ -43,7 +46,22 @@ func newListCmd(stdout, stderr io.Writer) *cobra.Command {
 				}
 				be = b
 			case "restic":
-				return resticNotImplemented(cmd)
+				info, err := checkResticBinary(cmd, true)
+				if err != nil {
+					return err
+				}
+				ctx := cmd.Context()
+				if ctx == nil {
+					ctx = context.Background()
+				}
+				if err := restic.EnsureRepository(ctx, info, tgt.Value); err != nil {
+					return err
+				}
+				b, err := backendrestic.New(ctx, info, tgt.Value)
+				if err != nil {
+					return err
+				}
+				be = b
 			default:
 				return fmt.Errorf("unsupported backend: %s", tgt.Scheme)
 			}
