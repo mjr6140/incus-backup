@@ -16,18 +16,47 @@ import (
 // EnsureRepository verifies that the given repository path has been
 // initialised. If the repository is missing it attempts to run `restic init`.
 func EnsureRepository(ctx context.Context, bin BinaryInfo, repo string) error {
-	_, stderr, err := runCommand(ctx, bin, repo, []string{"snapshots", "--json", "--limit", "1"}, nil)
-	if err == nil {
+	if err := probeSnapshots(ctx, bin, repo, true); err == nil {
 		return nil
+	} else if !isUnknownLimitFlag(err) {
+		if isNotRepository(err.Error()) {
+			if _, initStderr, initErr := runCommand(ctx, bin, repo, []string{"init"}, nil); initErr != nil {
+				return fmt.Errorf("restic: init repository: %w: %s", initErr, initStderr)
+			}
+			return nil
+		}
+		return err
 	}
-	if isNotRepository(stderr) {
-		_, initStderr, initErr := runCommand(ctx, bin, repo, []string{"init"}, nil)
-		if initErr != nil {
+	// Retry without --limit for restic versions that do not support it.
+	if err := probeSnapshots(ctx, bin, repo, false); err == nil {
+		return nil
+	} else if isNotRepository(err.Error()) {
+		if _, initStderr, initErr := runCommand(ctx, bin, repo, []string{"init"}, nil); initErr != nil {
 			return fmt.Errorf("restic: init repository: %w: %s", initErr, initStderr)
 		}
 		return nil
+	} else {
+		return err
 	}
-	return fmt.Errorf("restic: probe repository: %w: %s", err, stderr)
+}
+
+func probeSnapshots(ctx context.Context, bin BinaryInfo, repo string, useLimit bool) error {
+	args := []string{"snapshots", "--json"}
+	if useLimit {
+		args = append(args, "--limit", "1")
+	}
+	_, stderr, err := runCommand(ctx, bin, repo, args, nil)
+	if err != nil {
+		return fmt.Errorf("restic: probe repository: %w: %s", err, stderr)
+	}
+	return nil
+}
+
+func isUnknownLimitFlag(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "unknown flag: --limit") || strings.Contains(err.Error(), "unknown option --limit")
 }
 
 // BackupStream runs `restic backup --stdin` with the provided reader.

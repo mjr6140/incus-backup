@@ -8,12 +8,17 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"incus-backup/src/incusapi"
 	"incus-backup/src/restic"
 	pg "incus-backup/src/util/progress"
+)
+
+const (
+	resticInstanceDataFilename      = "export.tar.xz"
+	resticInstanceManifestFilename  = "manifest.json"
+	resticInstanceChecksumsFilename = "checksums.txt"
 )
 
 // BackupInstanceRestic streams an instance export directly into a restic repository.
@@ -55,7 +60,7 @@ func BackupInstanceRestic(ctx context.Context, bin restic.BinaryInfo, repo strin
 	hash := sha256.New()
 	reader = io.TeeReader(reader, hash)
 
-	filename := fmt.Sprintf("instances/%s/%s/%s/export.tar.xz", project, name, ts)
+	filename := resticInstanceDataFilename
 	tags := resticTagsForInstance(project, name, ts, "data", optimized, snapshot)
 	if err := restic.BackupStream(ctx, bin, repo, filename, tags, reader, progressOut); err != nil {
 		return "", err
@@ -76,13 +81,13 @@ func BackupInstanceRestic(ctx context.Context, bin restic.BinaryInfo, repo strin
 	if err != nil {
 		return "", err
 	}
-	manifestPath := strings.ReplaceAll(filename, "export.tar.xz", "manifest.json")
+	manifestPath := resticInstanceManifestFilename
 	if err := restic.BackupBytes(ctx, bin, repo, manifestPath, resticTagsForInstance(project, name, ts, "manifest", optimized, snapshot), mfBytes, progressOut); err != nil {
 		return "", err
 	}
 
-	checksums := fmt.Sprintf("%s  export.tar.xz\n", sum)
-	checksumPath := strings.ReplaceAll(filename, "export.tar.xz", "checksums.txt")
+	checksums := fmt.Sprintf("%s  %s\n", sum, resticInstanceDataFilename)
+	checksumPath := resticInstanceChecksumsFilename
 	if err := restic.BackupBytes(ctx, bin, repo, checksumPath, resticTagsForInstance(project, name, ts, "checksums", optimized, snapshot), []byte(checksums), progressOut); err != nil {
 		return "", err
 	}

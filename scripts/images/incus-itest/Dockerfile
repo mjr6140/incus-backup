@@ -1,7 +1,7 @@
 # Incus-enabled image for running integration tests in a privileged container
-# Base: Ubuntu 24.04 (Noble) with systemd, Go 1.22 (from Ubuntu), and Incus.
+# Base: Debian 13 (Trixie) with systemd, Go 1.22, restic 0.18+, and Incus.
 
-FROM ubuntu:24.04
+FROM debian:trixie
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -26,7 +26,7 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends incus incus-client; \
     apt-get clean; rm -rf /var/lib/apt/lists/*
 
-# Install Go (Ubuntu noble ships Go 1.22)
+# Install Go (Debian trixie ships Go 1.22)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends golang-go \
     && apt-get clean \

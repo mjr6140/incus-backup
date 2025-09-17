@@ -38,7 +38,7 @@ func BackupAllRestic(ctx context.Context, bin restic.BinaryInfo, repo string, cl
 
 	if data, hash, err := marshalProjects(client); err != nil {
 		return "", err
-	} else if err := restic.BackupBytes(ctx, bin, repo, configPath(ts, "projects.json"), tagsConfig(ts, "projects"), data, progressOut); err != nil {
+	} else if err := restic.BackupBytes(ctx, bin, repo, configFileName("projects.json"), tagsConfig(ts, "projects"), data, progressOut); err != nil {
 		return "", err
 	} else {
 		entries = append(entries, struct{ name, hash string }{"projects", hash})
@@ -46,7 +46,7 @@ func BackupAllRestic(ctx context.Context, bin restic.BinaryInfo, repo string, cl
 
 	if data, hash, err := marshalProfiles(client); err != nil {
 		return "", err
-	} else if err := restic.BackupBytes(ctx, bin, repo, configPath(ts, "profiles.json"), tagsConfig(ts, "profiles"), data, progressOut); err != nil {
+	} else if err := restic.BackupBytes(ctx, bin, repo, configFileName("profiles.json"), tagsConfig(ts, "profiles"), data, progressOut); err != nil {
 		return "", err
 	} else {
 		entries = append(entries, struct{ name, hash string }{"profiles", hash})
@@ -54,7 +54,7 @@ func BackupAllRestic(ctx context.Context, bin restic.BinaryInfo, repo string, cl
 
 	if data, hash, err := marshalNetworks(client); err != nil {
 		return "", err
-	} else if err := restic.BackupBytes(ctx, bin, repo, configPath(ts, "networks.json"), tagsConfig(ts, "networks"), data, progressOut); err != nil {
+	} else if err := restic.BackupBytes(ctx, bin, repo, configFileName("networks.json"), tagsConfig(ts, "networks"), data, progressOut); err != nil {
 		return "", err
 	} else {
 		entries = append(entries, struct{ name, hash string }{"networks", hash})
@@ -62,7 +62,7 @@ func BackupAllRestic(ctx context.Context, bin restic.BinaryInfo, repo string, cl
 
 	if data, hash, err := marshalStoragePools(client); err != nil {
 		return "", err
-	} else if err := restic.BackupBytes(ctx, bin, repo, configPath(ts, "storage_pools.json"), tagsConfig(ts, "storage_pools"), data, progressOut); err != nil {
+	} else if err := restic.BackupBytes(ctx, bin, repo, configFileName("storage_pools.json"), tagsConfig(ts, "storage_pools"), data, progressOut); err != nil {
 		return "", err
 	} else {
 		entries = append(entries, struct{ name, hash string }{"storage_pools", hash})
@@ -77,12 +77,12 @@ func BackupAllRestic(ctx context.Context, bin restic.BinaryInfo, repo string, cl
 		return "", err
 	}
 	manifestHash := hashBytes(manifestBytes)
-	if err := restic.BackupBytes(ctx, bin, repo, configPath(ts, "manifest.json"), tagsConfig(ts, "manifest"), manifestBytes, progressOut); err != nil {
+	if err := restic.BackupBytes(ctx, bin, repo, configFileName("manifest.json"), tagsConfig(ts, "manifest"), manifestBytes, progressOut); err != nil {
 		return "", err
 	}
 
 	checksums := buildChecksums(entries, manifestHash)
-	if err := restic.BackupBytes(ctx, bin, repo, configPath(ts, "checksums.txt"), tagsConfig(ts, "checksums"), []byte(checksums), progressOut); err != nil {
+	if err := restic.BackupBytes(ctx, bin, repo, configFileName("checksums.txt"), tagsConfig(ts, "checksums"), []byte(checksums), progressOut); err != nil {
 		return "", err
 	}
 
@@ -102,7 +102,7 @@ func LoadSnapshotRestic(ctx context.Context, bin restic.BinaryInfo, repo string,
 	}
 	snapshot.Timestamp = ts
 
-	manifestBytes, err := dumpConfigFile(ctx, bin, repo, manifestSnap, configPath(ts, "manifest.json"))
+	manifestBytes, err := dumpConfigFile(ctx, bin, repo, manifestSnap, configFileName("manifest.json"))
 	if err != nil {
 		return snapshot, err
 	}
@@ -210,9 +210,7 @@ func buildChecksums(entries []struct{ name, hash string }, manifestHash string) 
 	return strings.Join(lines, "\n") + "\n"
 }
 
-func configPath(ts, file string) string {
-	return fmt.Sprintf("config/%s/%s", ts, file)
-}
+func configFileName(file string) string { return file }
 
 func tagsConfig(ts, part string) []string {
 	return []string{
@@ -267,7 +265,7 @@ func loadProjectsRestic(ctx context.Context, bin restic.BinaryInfo, repo, ts str
 	if err != nil {
 		return nil, err
 	}
-	data, err := dumpConfigFile(ctx, bin, repo, snap, configPath(ts, "projects.json"))
+	data, err := dumpConfigFile(ctx, bin, repo, snap, configFileName("projects.json"))
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +281,7 @@ func loadProfilesRestic(ctx context.Context, bin restic.BinaryInfo, repo, ts str
 	if err != nil {
 		return nil, err
 	}
-	data, err := dumpConfigFile(ctx, bin, repo, snap, configPath(ts, "profiles.json"))
+	data, err := dumpConfigFile(ctx, bin, repo, snap, configFileName("profiles.json"))
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +297,7 @@ func loadNetworksRestic(ctx context.Context, bin restic.BinaryInfo, repo, ts str
 	if err != nil {
 		return nil, err
 	}
-	data, err := dumpConfigFile(ctx, bin, repo, snap, configPath(ts, "networks.json"))
+	data, err := dumpConfigFile(ctx, bin, repo, snap, configFileName("networks.json"))
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +313,7 @@ func loadStoragePoolsRestic(ctx context.Context, bin restic.BinaryInfo, repo, ts
 	if err != nil {
 		return nil, err
 	}
-	data, err := dumpConfigFile(ctx, bin, repo, snap, configPath(ts, "storage_pools.json"))
+	data, err := dumpConfigFile(ctx, bin, repo, snap, configFileName("storage_pools.json"))
 	if err != nil {
 		return nil, err
 	}

@@ -38,17 +38,4 @@ func RestoreInstanceRestic(ctx context.Context, bin restic.BinaryInfo, repo stri
 	return nil
 }
 
-func exportFilename(project, name string, snapshot restic.Snapshot) string {
-	tags := snapshot.TagMap()
-	ts := tags["timestamp"]
-	if ts == "" {
-		ts = snapshot.Time.UTC().Format("20060102T150405Z")
-	}
-	if tagsName := tags["name"]; tagsName != "" {
-		name = tagsName
-	}
-	if tagsProject := tags["project"]; tagsProject != "" {
-		project = tagsProject
-	}
-	return fmt.Sprintf("instances/%s/%s/%s/export.tar.xz", project, name, ts)
-}
+func exportFilename(string, string, restic.Snapshot) string { return resticInstanceDataFilename }

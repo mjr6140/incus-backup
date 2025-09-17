@@ -422,13 +422,9 @@ func hashResticFile(ctx context.Context, bin restic.BinaryInfo, repo string, sna
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func instanceChecksumsPath(project, name, ts string) string {
-	return instanceFilePath(project, name, ts, "checksums.txt")
-}
+func instanceChecksumsPath(string, string, string) string { return "checksums.txt" }
 
-func instanceFilePath(project, name, ts, file string) string {
-	return fmt.Sprintf("instances/%s/%s/%s/%s", project, name, ts, file)
-}
+func instanceFilePath(_, _, _, file string) string { return file }
 
 func instancePartForFile(file string) string {
 	switch file {
@@ -441,13 +437,9 @@ func instancePartForFile(file string) string {
 	}
 }
 
-func volumeChecksumsPath(project, pool, name, ts string) string {
-	return volumeFilePath(project, pool, name, ts, "checksums.txt")
-}
+func volumeChecksumsPath(string, string, string, string) string { return "checksums.txt" }
 
-func volumeFilePath(project, pool, name, ts, file string) string {
-	return fmt.Sprintf("volumes/%s/%s/%s/%s/%s", project, pool, name, ts, file)
-}
+func volumeFilePath(_, _, _, _, file string) string { return file }
 
 func volumePartForFile(file string) string {
 	switch file {
@@ -460,13 +452,9 @@ func volumePartForFile(file string) string {
 	}
 }
 
-func configChecksumsPath(ts string) string {
-	return configFilePath(ts, "checksums.txt")
-}
+func configChecksumsPath(string) string { return "checksums.txt" }
 
-func configFilePath(ts, file string) string {
-	return fmt.Sprintf("config/%s/%s", ts, file)
-}
+func configFilePath(_, file string) string { return file }
 
 func configPartForFile(file string) string {
 	switch file {

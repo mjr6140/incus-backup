@@ -38,20 +38,6 @@ func RestoreVolumeRestic(ctx context.Context, bin restic.BinaryInfo, repo string
 	return nil
 }
 
-func volumeExportFilename(project, pool, name string, snapshot restic.Snapshot) string {
-	tags := snapshot.TagMap()
-	if t := tags["project"]; t != "" {
-		project = t
-	}
-	if t := tags["pool"]; t != "" {
-		pool = t
-	}
-	if t := tags["name"]; t != "" {
-		name = t
-	}
-	ts := tags["timestamp"]
-	if ts == "" {
-		ts = snapshot.Time.UTC().Format("20060102T150405Z")
-	}
-	return fmt.Sprintf("volumes/%s/%s/%s/%s/volume.tar.xz", project, pool, name, ts)
+func volumeExportFilename(string, string, string, restic.Snapshot) string {
+	return resticVolumeDataFilename
 }

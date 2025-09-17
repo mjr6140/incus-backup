@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	backendpkg "incus-backup/src/backend"
 	"incus-backup/src/cli"
 	restictest "incus-backup/tests/internal/restictest"
 )
