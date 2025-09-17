@@ -42,17 +42,17 @@ func newRestoreVolumeCmd(stdout, stderr io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			client, err := incusapi.ConnectLocal()
+			if err != nil {
+				return err
+			}
 			if tgt.Scheme == "restic" {
-				return resticNotImplemented(cmd)
+				return restoreVolumeFromRestic(cmd, client, tgt, project, pool, name, version, targetName, replace, skipExisting, stdout)
 			}
 			if tgt.Scheme != "dir" {
 				return fmt.Errorf("unsupported backend: %s", tgt.Scheme)
 			}
 			snapDir, err := resolveVolumeSnapshotDir(tgt, project, pool, name, version)
-			if err != nil {
-				return err
-			}
-			client, err := incusapi.ConnectLocal()
 			if err != nil {
 				return err
 			}

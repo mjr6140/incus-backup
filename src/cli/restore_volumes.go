@@ -33,13 +33,19 @@ func newRestoreVolumesCmd(stdout, stderr io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			client, err := incusapi.ConnectLocal()
+			if err != nil {
+				return err
+			}
+
 			if tgt.Scheme == "restic" {
-				return resticNotImplemented(cmd)
+				return restoreVolumesFromRestic(cmd, client, tgt, project, version, args, replace, skipExisting, stdout)
 			}
 			if tgt.Scheme != "dir" {
 				return fmt.Errorf("unsupported backend: %s", tgt.Scheme)
 			}
-			// Collect pool/name pairs: if none, scan backup
+
 			var items [][2]string
 			if len(args) == 0 {
 				base := filepath.Join(tgt.DirPath, "volumes", project)
@@ -51,8 +57,7 @@ func newRestoreVolumesCmd(stdout, stderr io.Writer) *cobra.Command {
 					if !p.IsDir() || strings.HasPrefix(p.Name(), ".") {
 						continue
 					}
-					namesDir := filepath.Join(base, p.Name())
-					names, err := os.ReadDir(namesDir)
+					names, err := os.ReadDir(filepath.Join(base, p.Name()))
 					if err != nil {
 						return err
 					}
@@ -84,10 +89,6 @@ func newRestoreVolumesCmd(stdout, stderr io.Writer) *cobra.Command {
 				return nil
 			}
 
-			client, err := incusapi.ConnectLocal()
-			if err != nil {
-				return err
-			}
 			type row struct{ Action, Project, Pool, Name, TargetName, Version string }
 			var rows []row
 			for _, it := range items {
@@ -112,7 +113,6 @@ func newRestoreVolumesCmd(stdout, stderr io.Writer) *cobra.Command {
 				}
 				rows = append(rows, row{Action: action, Project: project, Pool: pool, Name: name, TargetName: name, Version: filepath.Base(snapDir)})
 			}
-			// Preview
 			tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
 			fmt.Fprintln(tw, "ACTION\tPROJECT\tPOOL\tNAME\tTARGET_NAME\tVERSION")
 			for _, r := range rows {

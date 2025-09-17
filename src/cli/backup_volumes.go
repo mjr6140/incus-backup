@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
@@ -29,10 +30,7 @@ func newBackupVolumesCmd(stdout, stderr io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if tgt.Scheme == "restic" {
-				return resticNotImplemented(cmd)
-			}
-			if tgt.Scheme != "dir" {
+			if tgt.Scheme != "dir" && tgt.Scheme != "restic" {
 				return fmt.Errorf("unsupported backend: %s", tgt.Scheme)
 			}
 			client, err := incusapi.ConnectLocal()
@@ -64,8 +62,22 @@ func newBackupVolumesCmd(stdout, stderr io.Writer) *cobra.Command {
 			for i, it := range items {
 				pool, name := it[0], it[1]
 				fmt.Fprintf(stdout, "[%d/%d] Backing up volume %s/%s (project %s)\n", i+1, total, pool, name, project)
-				if _, err := vol.BackupVolume(client, tgt.DirPath, project, pool, name, optimized, !noSnapshot, time.Now(), stdout); err != nil {
-					return err
+				if tgt.Scheme == "restic" {
+					info, err := checkResticBinary(cmd, true)
+					if err != nil {
+						return err
+					}
+					ctx := cmd.Context()
+					if ctx == nil {
+						ctx = context.Background()
+					}
+					if _, err := vol.BackupVolumeRestic(ctx, info, tgt.Value, client, project, pool, name, optimized, !noSnapshot, time.Now(), stdout); err != nil {
+						return err
+					}
+				} else {
+					if _, err := vol.BackupVolume(client, tgt.DirPath, project, pool, name, optimized, !noSnapshot, time.Now(), stdout); err != nil {
+						return err
+					}
 				}
 				fmt.Fprintf(stdout, "[%d/%d] Done %s/%s\n", i+1, total, pool, name)
 			}

@@ -1,19 +1,19 @@
 package cli
 
 import (
-    "context"
-    "fmt"
-    "io"
-    "sort"
-    "text/tabwriter"
+	"context"
+	"fmt"
+	"io"
+	"sort"
+	"text/tabwriter"
 
-    inst "incus-backup/src/backup/instances"
-    "incus-backup/src/incusapi"
-    "incus-backup/src/restic"
-    "incus-backup/src/safety"
-    "incus-backup/src/target"
+	inst "incus-backup/src/backup/instances"
+	"incus-backup/src/incusapi"
+	"incus-backup/src/restic"
+	"incus-backup/src/safety"
+	"incus-backup/src/target"
 
-    "github.com/spf13/cobra"
+	"github.com/spf13/cobra"
 )
 
 func restoreInstanceFromRestic(cmd *cobra.Command, client incusapi.Client, tgt target.Target, project, name, version, targetName string, replace, skipExisting bool, stdout io.Writer) error {
