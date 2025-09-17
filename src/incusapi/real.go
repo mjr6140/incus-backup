@@ -7,7 +7,6 @@ import (
 	"github.com/lxc/incus/shared/api"
 	"github.com/lxc/incus/shared/ioprogress"
 	"io"
-	"os"
 	"strings"
 	"time"
 )
@@ -229,7 +228,6 @@ func (r *RealClient) ExportInstance(project, name string, optimized bool, snapsh
 				last = st
 			}
 			if err := op.Wait(); err == nil {
-				// Ensure final status printed
 				_ = op.Refresh()
 				st2 := op.Get().Status
 				if st2 != "" && st2 != last {
@@ -245,50 +243,37 @@ func (r *RealClient) ExportInstance(project, name string, optimized bool, snapsh
 			return nil, err
 		}
 	}
-	// Determine backup name from operation resources
 	resources := op.Get().Resources
 	if len(resources["backups"]) == 0 {
 		return nil, errors.New("no backup resource returned")
 	}
 	backupURL := resources["backups"][0]
-	// Extract the last path segment as name
 	seg := backupURL[strings.LastIndex(backupURL, "/")+1:]
-	// Prepare a temp file and download with progress
-	f, err := os.CreateTemp("", "incus-export-*.tar")
-	if err != nil {
-		return nil, err
-	}
-	// Ensure cleanup of server-side backup once done
-	defer func() {
-		go func() {
-			bop, _ := srv.DeleteInstanceBackup(name, seg)
-			if bop != nil {
-				_ = bop.Wait()
-			}
-		}()
-	}()
-	// Download into the temp file
-	reqFile := incuscli.BackupFileRequest{BackupFile: f}
+	pipeR, pipeW := io.Pipe()
+	writer := &pipeWriteSeeker{PipeWriter: pipeW}
+	done := make(chan error, 1)
+	reqFile := incuscli.BackupFileRequest{BackupFile: writer}
 	if progressOut != nil {
 		reqFile.ProgressHandler = func(pd ioprogress.ProgressData) {
 			fmt.Fprintf(progressOut, "\r[download] %s", pd.Text)
 		}
 	}
-	if _, err := srv.GetInstanceBackupFile(name, seg, &reqFile); err != nil {
-		_ = f.Close()
-		_ = os.Remove(f.Name())
-		return nil, err
-	}
-	if progressOut != nil {
-		fmt.Fprint(progressOut, "\n")
-	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		_ = f.Close()
-		_ = os.Remove(f.Name())
-		return nil, err
-	}
-	// Return a ReadCloser that deletes the temp file on close
-	return &tempFileReadCloser{File: f}, nil
+	go func() {
+		var err error
+		if _, err = srv.GetInstanceBackupFile(name, seg, &reqFile); err != nil {
+			writer.CloseWithError(err)
+		} else {
+			writer.Close()
+			if progressOut != nil {
+				fmt.Fprint(progressOut, "\n")
+			}
+		}
+		if bop, _ := srv.DeleteInstanceBackup(name, seg); bop != nil {
+			_ = bop.Wait()
+		}
+		done <- err
+	}()
+	return &streamReadCloser{PipeReader: pipeR, wait: func() error { return <-done }}, nil
 }
 
 func (r *RealClient) ImportInstance(project, targetName string, rstream io.Reader, progressOut io.Writer) error {
@@ -338,13 +323,57 @@ func (r *RealClient) ImportInstance(project, targetName string, rstream io.Reade
 	return err
 }
 
-type tempFileReadCloser struct{ *os.File }
+type streamReadCloser struct {
+	*io.PipeReader
+	wait func() error
+}
 
-func (t *tempFileReadCloser) Close() error {
-	name := t.Name()
-	err := t.File.Close()
-	_ = os.Remove(name)
-	return err
+func (s *streamReadCloser) Close() error {
+	_ = s.PipeReader.Close()
+	if s.wait != nil {
+		err := s.wait()
+		s.wait = nil
+		return err
+	}
+	return nil
+}
+
+type pipeWriteSeeker struct {
+	*io.PipeWriter
+	offset int64
+}
+
+func (p *pipeWriteSeeker) Write(b []byte) (int, error) {
+	n, err := p.PipeWriter.Write(b)
+	p.offset += int64(n)
+	return n, err
+}
+
+func (p *pipeWriteSeeker) Close() error {
+	return p.PipeWriter.Close()
+}
+
+func (p *pipeWriteSeeker) CloseWithError(err error) error {
+	return p.PipeWriter.CloseWithError(err)
+}
+
+func (p *pipeWriteSeeker) Seek(offset int64, whence int) (int64, error) {
+	switch whence {
+	case io.SeekStart:
+		if offset == 0 {
+			p.offset = 0
+			return 0, nil
+		}
+	case io.SeekCurrent:
+		if offset == 0 {
+			return p.offset, nil
+		}
+	case io.SeekEnd:
+		if offset == 0 {
+			return p.offset, nil
+		}
+	}
+	return 0, fmt.Errorf("pipeWriteSeeker: unsupported seek %d (whence %d)", offset, whence)
 }
 
 func (r *RealClient) InstanceExists(project, name string) (bool, error) {
@@ -520,44 +549,37 @@ func (r *RealClient) ExportVolume(project, pool, name string, optimized bool, sn
 			return nil, err
 		}
 	}
-	// Determine backup name from operation resources
 	resources := op.Get().Resources
 	if len(resources["backups"]) == 0 {
 		return nil, errors.New("no volume backup resource returned")
 	}
 	backupURL := resources["backups"][0]
 	seg := backupURL[strings.LastIndex(backupURL, "/")+1:]
-	// temp file
-	f, err := os.CreateTemp("", "incus-vol-export-*.tar")
-	if err != nil {
-		return nil, err
-	}
-	// Download with progress
-	reqFile := incuscli.BackupFileRequest{BackupFile: f}
+	pipeR, pipeW := io.Pipe()
+	writer := &pipeWriteSeeker{PipeWriter: pipeW}
+	done := make(chan error, 1)
+	reqFile := incuscli.BackupFileRequest{BackupFile: writer}
 	if progressOut != nil {
-		reqFile.ProgressHandler = func(pd ioprogress.ProgressData) { fmt.Fprintf(progressOut, "\r[download] %s", pd.Text) }
-	}
-	if _, err := srv.GetStoragePoolVolumeBackupFile(pool, name, seg, &reqFile); err != nil {
-		_ = f.Close()
-		_ = os.Remove(f.Name())
-		return nil, err
-	}
-	if progressOut != nil {
-		fmt.Fprint(progressOut, "\n")
-	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		_ = f.Close()
-		_ = os.Remove(f.Name())
-		return nil, err
-	}
-	// Delete server-side backup (best-effort)
-	go func() {
-		_op, _ := srv.DeleteStoragePoolVolumeBackup(pool, name, seg)
-		if _op != nil {
-			_ = _op.Wait()
+		reqFile.ProgressHandler = func(pd ioprogress.ProgressData) {
+			fmt.Fprintf(progressOut, "\r[download] %s", pd.Text)
 		}
+	}
+	go func() {
+		var err error
+		if _, err = srv.GetStoragePoolVolumeBackupFile(pool, name, seg, &reqFile); err != nil {
+			writer.CloseWithError(err)
+		} else {
+			writer.Close()
+			if progressOut != nil {
+				fmt.Fprint(progressOut, "\n")
+			}
+		}
+		if bop, _ := srv.DeleteStoragePoolVolumeBackup(pool, name, seg); bop != nil {
+			_ = bop.Wait()
+		}
+		done <- err
 	}()
-	return &tempFileReadCloser{File: f}, nil
+	return &streamReadCloser{PipeReader: pipeR, wait: func() error { return <-done }}, nil
 }
 
 func (r *RealClient) ImportVolume(project, poolTarget, nameTarget string, reader io.Reader, progressOut io.Writer) error {
