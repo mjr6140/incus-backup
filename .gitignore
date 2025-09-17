@@ -1,6 +1,7 @@
 # Go build
 bin/
 dist/
+incus-backup
 
 # Go module/build caches (persisted for itest but not committed)
 .cache/
