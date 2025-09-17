@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	ibak "incus-backup/src/backup/instances"
 	vbak "incus-backup/src/backup/volumes"
 	"incus-backup/src/incusapi"
+	"incus-backup/src/restic"
 	"incus-backup/src/safety"
 	"incus-backup/src/target"
 )
@@ -36,7 +38,7 @@ func newRestoreAllCmd(stdout, stderr io.Writer) *cobra.Command {
 				return err
 			}
 			if tgt.Scheme == "restic" {
-				return resticNotImplemented(cmd)
+				return restoreAllFromRestic(cmd, tgt, project, version, replace, skipExisting, applyConfig, stdout)
 			}
 			if tgt.Scheme != "dir" {
 				return fmt.Errorf("unsupported backend: %s", tgt.Scheme)
@@ -257,4 +259,201 @@ func newRestoreAllCmd(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&skipExisting, "skip-existing", false, "Skip resources that already exist")
 	cmd.Flags().BoolVar(&applyConfig, "apply-config", false, "Apply declarative config changes from backup")
 	return cmd
+}
+
+func restoreAllFromRestic(cmd *cobra.Command, tgt target.Target, project, version string, replace, skipExisting, applyConfig bool, stdout io.Writer) error {
+	info, err := checkResticBinary(cmd, true)
+	if err != nil {
+		return err
+	}
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := restic.EnsureRepository(ctx, info, tgt.Value); err != nil {
+		return err
+	}
+	client, err := incusapi.ConnectLocal()
+	if err != nil {
+		return err
+	}
+
+	configData, err := cfg.LoadSnapshotRestic(ctx, info, tgt.Value, version)
+	if err != nil {
+		return err
+	}
+	currentProjects, err := client.ListProjects()
+	if err != nil {
+		return err
+	}
+	projectPlan := cfg.BuildProjectsPlan(currentProjects, configData.Projects)
+	currentNetworks, err := client.ListNetworks()
+	if err != nil {
+		return err
+	}
+	networkPlan := cfg.BuildNetworksPlan(currentNetworks, configData.Networks)
+	currentPools, err := client.ListStoragePools()
+	if err != nil {
+		return err
+	}
+	poolPlan := cfg.BuildStoragePoolsPlan(currentPools, configData.StoragePools)
+
+	volItems, err := volumeItemsFromArgs(ctx, info, tgt.Value, project, nil)
+	if err != nil {
+		return err
+	}
+	for i := range volItems {
+		it := &volItems[i]
+		snap, err := findVolumeSnapshot(ctx, info, tgt.Value, project, it.pool, it.name, version)
+		if err != nil {
+			return err
+		}
+		it.snapshot = snap
+		exists, err := client.VolumeExists(project, it.pool, it.name)
+		if err != nil {
+			return err
+		}
+		it.exists = exists
+	}
+
+	type instItem struct {
+		name     string
+		snapshot restic.Snapshot
+		exists   bool
+	}
+	var instItems []instItem
+	instNames, err := listInstanceNames(ctx, info, tgt.Value, project)
+	if err != nil {
+		return err
+	}
+	for _, name := range instNames {
+		snap, err := findInstanceSnapshot(ctx, info, tgt.Value, project, name, version)
+		if err != nil {
+			return err
+		}
+		exists, err := client.InstanceExists(project, name)
+		if err != nil {
+			return err
+		}
+		instItems = append(instItems, instItem{name: name, snapshot: snap, exists: exists})
+	}
+
+	fmt.Fprintln(stdout, "Config preview")
+	renderProjectsPlan(stdout, projectPlan)
+	renderNetworksPlan(stdout, networkPlan)
+	renderStoragePoolsPlan(stdout, poolPlan)
+
+	type vrow struct{ Action, Project, Pool, Name, Version string }
+	var vrows []vrow
+	for _, it := range volItems {
+		action := "create"
+		if it.exists {
+			action = "conflict"
+			if replace {
+				action = "replace"
+			}
+			if skipExisting {
+				action = "skip"
+			}
+		}
+		vrows = append(vrows, vrow{Action: action, Project: project, Pool: it.pool, Name: it.name, Version: volumeSnapshotTimestamp(it.snapshot)})
+	}
+	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "ACTION\tPROJECT\tPOOL\tNAME\tVERSION")
+	for _, r := range vrows {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", r.Action, r.Project, r.Pool, r.Name, r.Version)
+	}
+	_ = tw.Flush()
+
+	type irow struct{ Action, Project, Name, Version string }
+	var irows []irow
+	for _, it := range instItems {
+		action := "create"
+		if it.exists {
+			action = "conflict"
+			if replace {
+				action = "replace"
+			}
+			if skipExisting {
+				action = "skip"
+			}
+		}
+		irows = append(irows, irow{Action: action, Project: project, Name: it.name, Version: snapshotTimestamp(it.snapshot)})
+	}
+	tw = tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "ACTION\tPROJECT\tNAME\tVERSION")
+	for _, r := range irows {
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", r.Action, r.Project, r.Name, r.Version)
+	}
+	_ = tw.Flush()
+
+	opts := getSafetyOptions(cmd)
+	if opts.DryRun {
+		return nil
+	}
+
+	ok, err := safety.Confirm(opts, cmd.InOrStdin(), stdout, fmt.Sprintf("Apply restore for config (apply=%v), %d volumes, %d instances?", applyConfig, len(volItems), len(instItems)))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+
+	if applyConfig {
+		renderProjectsPlan(stdout, projectPlan)
+		renderNetworksPlan(stdout, networkPlan)
+		renderStoragePoolsPlan(stdout, poolPlan)
+
+		if sum, err := cfg.ApplyStoragePoolsPlan(client, poolPlan, opts.Force); err != nil {
+			return err
+		} else if sum != "" {
+			fmt.Fprintln(stdout, sum)
+		}
+		if sum, err := cfg.ApplyNetworksPlan(client, networkPlan, opts.Force); err != nil {
+			return err
+		} else if sum != "" {
+			fmt.Fprintln(stdout, sum)
+		}
+		if sum, err := cfg.ApplyProjectsPlan(client, projectPlan); err != nil {
+			return err
+		} else if sum != "" {
+			fmt.Fprintln(stdout, sum)
+		}
+	}
+
+	for i, it := range volItems {
+		fmt.Fprintf(stdout, "[vol %d/%d] %s/%s\n", i+1, len(volItems), it.pool, it.name)
+		if it.exists {
+			if skipExisting {
+				fmt.Fprintf(stdout, "[vol %d/%d] skip existing\n", i+1, len(volItems))
+				continue
+			}
+			if err := client.DeleteVolume(project, it.pool, it.name); err != nil {
+				return err
+			}
+		}
+		if err := vbak.RestoreVolumeRestic(ctx, info, tgt.Value, it.snapshot, client, project, it.pool, it.name, stdout); err != nil {
+			return err
+		}
+	}
+
+	for i, it := range instItems {
+		fmt.Fprintf(stdout, "[inst %d/%d] %s\n", i+1, len(instItems), it.name)
+		if it.exists {
+			if skipExisting {
+				fmt.Fprintf(stdout, "[inst %d/%d] skip existing\n", i+1, len(instItems))
+				continue
+			}
+			_ = client.StopInstance(project, it.name, true)
+			if err := client.DeleteInstance(project, it.name); err != nil {
+				return err
+			}
+		}
+		if err := ibak.RestoreInstanceRestic(ctx, info, tgt.Value, it.snapshot, client, project, it.name, it.name, stdout); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
