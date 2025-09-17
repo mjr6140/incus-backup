@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -67,6 +68,9 @@ func newVerifyCmd(stdout, stderr io.Writer) *cobra.Command {
 			err = runVerifyStreaming(tgt.DirPath, kind, func(r verifyResult) {
 				fmt.Fprintf(stdout, rowFmt,
 					safePad(r.Type), safePad(r.Project), safePad(r.Pool), safePad(r.Name), safePad(r.Fingerprint), safePad(r.Timestamp), r.Status)
+				for _, file := range r.Files {
+					fmt.Fprintf(stdout, "    - %s: %s\n", file.Name, renderFileDetail(file))
+				}
 			})
 			return err
 		},
@@ -77,235 +81,184 @@ func newVerifyCmd(stdout, stderr io.Writer) *cobra.Command {
 }
 
 type verifyResult struct {
-	Type        string `json:"type"`
-	Project     string `json:"project,omitempty"`
-	Pool        string `json:"pool,omitempty"`
-	Name        string `json:"name,omitempty"`
-	Fingerprint string `json:"fingerprint,omitempty"`
-	Timestamp   string `json:"timestamp"`
-	Status      string `json:"status"`
-	Path        string `json:"path"`
+	Type        string             `json:"type"`
+	Project     string             `json:"project,omitempty"`
+	Pool        string             `json:"pool,omitempty"`
+	Name        string             `json:"name,omitempty"`
+	Fingerprint string             `json:"fingerprint,omitempty"`
+	Timestamp   string             `json:"timestamp"`
+	Status      string             `json:"status"`
+	Path        string             `json:"path"`
+	Files       []verifyFileResult `json:"files,omitempty"`
+}
+
+type verifyFileResult struct {
+	Name     string `json:"name"`
+	Status   string `json:"status"`
+	Expected string `json:"expected,omitempty"`
+	Actual   string `json:"actual,omitempty"`
+	Error    string `json:"error,omitempty"`
 }
 
 func runVerify(root, kind string) ([]verifyResult, error) {
 	var out []verifyResult
-	// instances
-	if kind == "all" || kind == "instances" {
-		instBase := filepath.Join(root, "instances")
-		projects, _ := os.ReadDir(instBase)
-		for _, pr := range projects {
-			if !pr.IsDir() || strings.HasPrefix(pr.Name(), ".") {
-				continue
-			}
-			names, _ := os.ReadDir(filepath.Join(instBase, pr.Name()))
-			for _, nm := range names {
-				if !nm.IsDir() || strings.HasPrefix(nm.Name(), ".") {
-					continue
-				}
-				snaps, _ := os.ReadDir(filepath.Join(instBase, pr.Name(), nm.Name()))
-				for _, ts := range snaps {
-					if !ts.IsDir() || strings.HasPrefix(ts.Name(), ".") {
-						continue
-					}
-					p := filepath.Join(instBase, pr.Name(), nm.Name(), ts.Name())
-					status := verifySnapshotDir(p)
-					out = append(out, verifyResult{Type: "instance", Project: pr.Name(), Name: nm.Name(), Timestamp: ts.Name(), Status: status, Path: p})
-				}
-			}
-		}
-	}
-	// volumes
-	if kind == "all" || kind == "volumes" {
-		volBase := filepath.Join(root, "volumes")
-		projects, _ := os.ReadDir(volBase)
-		for _, pr := range projects {
-			if !pr.IsDir() || strings.HasPrefix(pr.Name(), ".") {
-				continue
-			}
-			pools, _ := os.ReadDir(filepath.Join(volBase, pr.Name()))
-			for _, pool := range pools {
-				if !pool.IsDir() || strings.HasPrefix(pool.Name(), ".") {
-					continue
-				}
-				names, _ := os.ReadDir(filepath.Join(volBase, pr.Name(), pool.Name()))
-				for _, nm := range names {
-					if !nm.IsDir() || strings.HasPrefix(nm.Name(), ".") {
-						continue
-					}
-					snaps, _ := os.ReadDir(filepath.Join(volBase, pr.Name(), pool.Name(), nm.Name()))
-					for _, ts := range snaps {
-						if !ts.IsDir() || strings.HasPrefix(ts.Name(), ".") {
-							continue
-						}
-						p := filepath.Join(volBase, pr.Name(), pool.Name(), nm.Name(), ts.Name())
-						status := verifySnapshotDir(p)
-						out = append(out, verifyResult{Type: "volume", Project: pr.Name(), Pool: pool.Name(), Name: nm.Name(), Timestamp: ts.Name(), Status: status, Path: p})
-					}
-				}
-			}
-		}
-	}
-	// images
-	if kind == "all" || kind == "images" {
-		imgBase := filepath.Join(root, "images")
-		fps, _ := os.ReadDir(imgBase)
-		for _, fp := range fps {
-			if !fp.IsDir() || strings.HasPrefix(fp.Name(), ".") {
-				continue
-			}
-			snaps, _ := os.ReadDir(filepath.Join(imgBase, fp.Name()))
-			for _, ts := range snaps {
-				if !ts.IsDir() || strings.HasPrefix(ts.Name(), ".") {
-					continue
-				}
-				p := filepath.Join(imgBase, fp.Name(), ts.Name())
-				status := verifySnapshotDir(p)
-				out = append(out, verifyResult{Type: "image", Fingerprint: fp.Name(), Timestamp: ts.Name(), Status: status, Path: p})
-			}
-		}
-	}
-	// config
-	if kind == "all" || kind == "config" {
-		cfgBase := filepath.Join(root, "config")
-		snaps, _ := os.ReadDir(cfgBase)
-		for _, ts := range snaps {
-			if !ts.IsDir() || strings.HasPrefix(ts.Name(), ".") {
-				continue
-			}
-			p := filepath.Join(cfgBase, ts.Name())
-			status := verifySnapshotDir(p)
-			out = append(out, verifyResult{Type: "config", Timestamp: ts.Name(), Status: status, Path: p})
-		}
+	if err := walkSnapshots(root, kind, func(r verifyResult) { out = append(out, r) }); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
 
 func safePad(s string) string { return s }
 
+func renderFileDetail(f verifyFileResult) string {
+	switch f.Status {
+	case "mismatch":
+		return fmt.Sprintf("mismatch (expected=%s actual=%s)", f.Expected, f.Actual)
+	case "missing":
+		if f.Error != "" {
+			return fmt.Sprintf("missing (%s)", f.Error)
+		}
+		if f.Expected != "" {
+			return fmt.Sprintf("missing (expected=%s)", f.Expected)
+		}
+	case "error":
+		if f.Error != "" {
+			return fmt.Sprintf("error (%s)", f.Error)
+		}
+	}
+	if f.Error != "" {
+		return fmt.Sprintf("%s (%s)", f.Status, f.Error)
+	}
+	return f.Status
+}
+
 // runVerifyStreaming walks snapshots and calls cb for each result, allowing
 // callers to print progress incrementally.
 func runVerifyStreaming(root, kind string, cb func(verifyResult)) error {
-	// instances
+	return walkSnapshots(root, kind, cb)
+}
+
+func walkSnapshots(root, kind string, cb func(verifyResult)) error {
 	if kind == "all" || kind == "instances" {
 		instBase := filepath.Join(root, "instances")
-		projects, _ := os.ReadDir(instBase)
-		for _, pr := range projects {
-			if !pr.IsDir() || strings.HasPrefix(pr.Name(), ".") {
-				continue
-			}
-			names, _ := os.ReadDir(filepath.Join(instBase, pr.Name()))
-			for _, nm := range names {
-				if !nm.IsDir() || strings.HasPrefix(nm.Name(), ".") {
-					continue
-				}
-				snaps, _ := os.ReadDir(filepath.Join(instBase, pr.Name(), nm.Name()))
-				for _, ts := range snaps {
-					if !ts.IsDir() || strings.HasPrefix(ts.Name(), ".") {
-						continue
-					}
-					p := filepath.Join(instBase, pr.Name(), nm.Name(), ts.Name())
-					status := verifySnapshotDir(p)
-					cb(verifyResult{Type: "instance", Project: pr.Name(), Name: nm.Name(), Timestamp: ts.Name(), Status: status, Path: p})
+		for _, project := range sortedVisibleDirs(instBase) {
+			projPath := filepath.Join(instBase, project)
+			for _, name := range sortedVisibleDirs(projPath) {
+				snapPath := filepath.Join(projPath, name)
+				for _, ts := range sortedVisibleDirs(snapPath) {
+					dir := filepath.Join(snapPath, ts)
+					status, files := verifySnapshotDir(dir)
+					cb(verifyResult{Type: "instance", Project: project, Name: name, Timestamp: ts, Status: status, Path: dir, Files: files})
 				}
 			}
 		}
 	}
-	// volumes
 	if kind == "all" || kind == "volumes" {
 		volBase := filepath.Join(root, "volumes")
-		projects, _ := os.ReadDir(volBase)
-		for _, pr := range projects {
-			if !pr.IsDir() || strings.HasPrefix(pr.Name(), ".") {
-				continue
-			}
-			pools, _ := os.ReadDir(filepath.Join(volBase, pr.Name()))
-			for _, pool := range pools {
-				if !pool.IsDir() || strings.HasPrefix(pool.Name(), ".") {
-					continue
-				}
-				names, _ := os.ReadDir(filepath.Join(volBase, pr.Name(), pool.Name()))
-				for _, nm := range names {
-					if !nm.IsDir() || strings.HasPrefix(nm.Name(), ".") {
-						continue
-					}
-					snaps, _ := os.ReadDir(filepath.Join(volBase, pr.Name(), pool.Name(), nm.Name()))
-					for _, ts := range snaps {
-						if !ts.IsDir() || strings.HasPrefix(ts.Name(), ".") {
-							continue
-						}
-						p := filepath.Join(volBase, pr.Name(), pool.Name(), nm.Name(), ts.Name())
-						status := verifySnapshotDir(p)
-						cb(verifyResult{Type: "volume", Project: pr.Name(), Pool: pool.Name(), Name: nm.Name(), Timestamp: ts.Name(), Status: status, Path: p})
+		for _, project := range sortedVisibleDirs(volBase) {
+			projPath := filepath.Join(volBase, project)
+			for _, pool := range sortedVisibleDirs(projPath) {
+				poolPath := filepath.Join(projPath, pool)
+				for _, name := range sortedVisibleDirs(poolPath) {
+					namePath := filepath.Join(poolPath, name)
+					for _, ts := range sortedVisibleDirs(namePath) {
+						dir := filepath.Join(namePath, ts)
+						status, files := verifySnapshotDir(dir)
+						cb(verifyResult{Type: "volume", Project: project, Pool: pool, Name: name, Timestamp: ts, Status: status, Path: dir, Files: files})
 					}
 				}
 			}
 		}
 	}
-	// images
 	if kind == "all" || kind == "images" {
 		imgBase := filepath.Join(root, "images")
-		fps, _ := os.ReadDir(imgBase)
-		for _, fp := range fps {
-			if !fp.IsDir() || strings.HasPrefix(fp.Name(), ".") {
-				continue
-			}
-			snaps, _ := os.ReadDir(filepath.Join(imgBase, fp.Name()))
-			for _, ts := range snaps {
-				if !ts.IsDir() || strings.HasPrefix(ts.Name(), ".") {
-					continue
-				}
-				p := filepath.Join(imgBase, fp.Name(), ts.Name())
-				status := verifySnapshotDir(p)
-				cb(verifyResult{Type: "image", Fingerprint: fp.Name(), Timestamp: ts.Name(), Status: status, Path: p})
+		for _, fingerprint := range sortedVisibleDirs(imgBase) {
+			imgPath := filepath.Join(imgBase, fingerprint)
+			for _, ts := range sortedVisibleDirs(imgPath) {
+				dir := filepath.Join(imgPath, ts)
+				status, files := verifySnapshotDir(dir)
+				cb(verifyResult{Type: "image", Fingerprint: fingerprint, Timestamp: ts, Status: status, Path: dir, Files: files})
 			}
 		}
 	}
-	// config
 	if kind == "all" || kind == "config" {
 		cfgBase := filepath.Join(root, "config")
-		snaps, _ := os.ReadDir(cfgBase)
-		for _, ts := range snaps {
-			if !ts.IsDir() || strings.HasPrefix(ts.Name(), ".") {
-				continue
-			}
-			p := filepath.Join(cfgBase, ts.Name())
-			status := verifySnapshotDir(p)
-			cb(verifyResult{Type: "config", Timestamp: ts.Name(), Status: status, Path: p})
+		for _, ts := range sortedVisibleDirs(cfgBase) {
+			dir := filepath.Join(cfgBase, ts)
+			status, files := verifySnapshotDir(dir)
+			cb(verifyResult{Type: "config", Timestamp: ts, Status: status, Path: dir, Files: files})
 		}
 	}
 	return nil
 }
 
-func verifySnapshotDir(dir string) string {
+func sortedVisibleDirs(path string) []string {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil
+	}
+	var names []string
+	for _, entry := range entries {
+		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
+			names = append(names, entry.Name())
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+func verifySnapshotDir(dir string) (string, []verifyFileResult) {
 	f, err := os.Open(filepath.Join(dir, "checksums.txt"))
 	if err != nil {
-		return fmt.Sprintf("missing checksums.txt: %v", err)
+		return "error", []verifyFileResult{{Name: "checksums.txt", Status: "missing", Error: err.Error()}}
 	}
 	defer f.Close()
 	scanner := bufio.NewScanner(f)
-	ok := true
+	var files []verifyFileResult
+	hasMismatch := false
+	hasError := false
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
 			continue
 		}
-		// Expect format: <sha256>  <filename>
 		parts := strings.SplitN(line, "  ", 2)
 		if len(parts) != 2 {
-			ok = false
+			hasError = true
+			files = append(files, verifyFileResult{Name: line, Status: "error", Error: "invalid checksum entry"})
 			continue
 		}
 		want := parts[0]
 		name := parts[1]
-		sum, err := sha256File(filepath.Join(dir, name))
-		if err != nil || !strings.EqualFold(want, sum) {
-			ok = false
+		actual, ferr := sha256File(filepath.Join(dir, name))
+		if ferr != nil {
+			hasError = true
+			status := "error"
+			if errors.Is(ferr, os.ErrNotExist) {
+				status = "missing"
+			}
+			files = append(files, verifyFileResult{Name: name, Status: status, Expected: want, Error: ferr.Error()})
+			continue
 		}
+		if strings.EqualFold(want, actual) {
+			files = append(files, verifyFileResult{Name: name, Status: "ok", Expected: want, Actual: actual})
+			continue
+		}
+		hasMismatch = true
+		files = append(files, verifyFileResult{Name: name, Status: "mismatch", Expected: want, Actual: actual})
 	}
-	if ok {
-		return "ok"
+	if err := scanner.Err(); err != nil {
+		hasError = true
+		files = append(files, verifyFileResult{Name: "checksums.txt", Status: "error", Error: err.Error()})
 	}
-	return "mismatch"
+	switch {
+	case hasError:
+		return "error", files
+	case hasMismatch:
+		return "mismatch", files
+	default:
+		return "ok", files
+	}
 }
 
 func sha256File(path string) (string, error) {
