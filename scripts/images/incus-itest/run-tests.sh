@@ -28,6 +28,12 @@ if ! incus info >/dev/null 2>&1; then
 fi
 
 echo "[run-tests] Incus version: $(incus version || true)"
+echo "[run-tests] restic version: $(restic version || true)"
+
+export RESTIC_PASSWORD=${RESTIC_PASSWORD:-incus-itest}
+export RESTIC_PROGRESS=${RESTIC_PROGRESS:-1}
+export RESTIC_CACHE_DIR=${RESTIC_CACHE_DIR:-/workspace/.cache/restic}
+mkdir -p "$RESTIC_CACHE_DIR"
 
 cd "$WORKDIR"
 

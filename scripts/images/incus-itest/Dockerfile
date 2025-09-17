@@ -11,6 +11,7 @@ RUN apt-get update \
         systemd systemd-sysv dbus udev \
         ca-certificates curl gnupg git sudo \
         tzdata \
+        restic jq \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -37,4 +38,3 @@ COPY --chmod=755 run-tests.sh /usr/local/bin/run-tests.sh
 # Default to systemd init so services are available in the container
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]
-

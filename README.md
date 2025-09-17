@@ -90,7 +90,7 @@ Top-level commands: `backup`, `restore`, `list`, `verify` (future), `prune` (fut
 # Storage Backends
 
 - `directory` (default): write exports to a filesystem tree.
-- `restic` (future): pluggable backend via a `StorageBackend` interface.
+- `restic` (future): pluggable backend via a `StorageBackend` interface. The restic CLI (>=0.18.0) must be installed and available on `PATH`; we stream backups over `restic backup --stdin` rather than staging tarballs on disk.
 
 The initial implementation targets `directory` only, with an interface to
 enable `restic` later without changing the CLI.

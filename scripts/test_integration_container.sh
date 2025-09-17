@@ -17,7 +17,8 @@ IMG_DIR="$ROOT_DIR/scripts/images/incus-itest"
 # Use host-persisted caches inside the bind-mounted workspace to avoid re-downloading modules.
 HOST_GOMODCACHE="$ROOT_DIR/.cache/gomod"
 HOST_GOCACHE="$ROOT_DIR/.cache/gocache"
-mkdir -p "$HOST_GOMODCACHE" "$HOST_GOCACHE"
+HOST_RESTICCACHE="$ROOT_DIR/.cache/restic"
+mkdir -p "$HOST_GOMODCACHE" "$HOST_GOCACHE" "$HOST_RESTICCACHE"
 
 pick_runtime() {
   if [[ -n "${RUNTIME}" ]]; then

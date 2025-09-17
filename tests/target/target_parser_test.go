@@ -43,8 +43,21 @@ func TestParse_Invalid_NoScheme(t *testing.T) {
 }
 
 func TestParse_Invalid_UnsupportedScheme(t *testing.T) {
-    if _, err := target.Parse("restic:/repo"); err == nil {
+    if _, err := target.Parse("s3:/repo"); err == nil {
         t.Fatalf("expected error for unsupported scheme")
+    }
+}
+
+func TestParse_Restic_OK(t *testing.T) {
+    got, err := target.Parse("restic:/var/backups/repo")
+    if err != nil {
+        t.Fatalf("Parse error: %v", err)
+    }
+    if got.Scheme != "restic" {
+        t.Fatalf("scheme = %q, want restic", got.Scheme)
+    }
+    if got.Value != "/var/backups/repo" {
+        t.Fatalf("value = %q, want /var/backups/repo", got.Value)
     }
 }
 
@@ -53,4 +66,3 @@ func TestParse_Dir_Relative_Invalid(t *testing.T) {
         t.Fatalf("expected error for relative path")
     }
 }
-

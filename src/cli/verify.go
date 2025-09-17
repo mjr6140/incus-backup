@@ -37,8 +37,11 @@ func newVerifyCmd(stdout, stderr io.Writer) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if tgt.Scheme == "restic" {
+				return resticNotImplemented(cmd)
+			}
 			if tgt.Scheme != "dir" {
-				return fmt.Errorf("verify: only directory backend is supported")
+				return fmt.Errorf("verify: unsupported backend %s", tgt.Scheme)
 			}
 
 			if output == "json" {
