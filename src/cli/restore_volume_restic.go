@@ -110,7 +110,8 @@ func restoreVolumesFromRestic(cmd *cobra.Command, client incusapi.Client, tgt ta
 
 	type row struct{ Action, Project, Pool, Name, TargetName, Version string }
 	var rows []row
-	for _, it := range items {
+	for i := range items {
+		it := &items[i]
 		snap, err := findVolumeSnapshot(ctx, info, tgt.Value, project, it.pool, it.name, version)
 		if err != nil {
 			return err

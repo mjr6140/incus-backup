@@ -164,10 +164,11 @@ func (s Snapshot) TagMap() map[string]string {
 }
 
 // ListSnapshots returns snapshots matching the provided tags.
+
 func ListSnapshots(ctx context.Context, bin BinaryInfo, repo string, tags []string) ([]Snapshot, error) {
 	args := []string{"snapshots", "--json"}
-	for _, tag := range tags {
-		args = append(args, "--tag", tag)
+	if len(tags) > 0 {
+		args = append(args, "--tag", strings.Join(tags, ","))
 	}
 	stdout, stderr, err := runCommand(ctx, bin, repo, args, nil)
 	if err != nil {
@@ -177,8 +178,38 @@ func ListSnapshots(ctx context.Context, bin BinaryInfo, repo string, tags []stri
 	if err := json.Unmarshal([]byte(stdout), &snaps); err != nil {
 		return nil, fmt.Errorf("restic: parse snapshots json: %w", err)
 	}
+	if len(tags) > 0 {
+		filtered := snaps[:0]
+		for _, snap := range snaps {
+			if snapshotHasAllTags(snap.Tags, tags) {
+				filtered = append(filtered, snap)
+			}
+		}
+		snaps = filtered
+	}
+	for i := range snaps {
+		if snaps[i].ID == "" {
+			snaps[i].ID = snaps[i].ShortID
+		}
+	}
 	sort.Slice(snaps, func(i, j int) bool { return snaps[i].Time.Before(snaps[j].Time) })
 	return snaps, nil
+}
+
+func snapshotHasAllTags(have []string, want []string) bool {
+	if len(want) == 0 {
+		return true
+	}
+	set := make(map[string]struct{}, len(have))
+	for _, tag := range have {
+		set[tag] = struct{}{}
+	}
+	for _, tag := range want {
+		if _, ok := set[tag]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func appendRepoEnv(env []string, repo string) []string {
