@@ -19,7 +19,7 @@ to recreate environment state.
 
 # CLI Syntax
 
-Top-level commands: `backup`, `restore`, `list`, `verify` (future), `prune` (future).
+Top-level commands: `backup`, `restore`, `list`, `verify`, `prune`.
 
 ## Commands Overview
 
@@ -120,7 +120,7 @@ A backup target must be configured.
 
 # CLI Syntax
 
-Top-level commands: `backup`, `restore`, `list`, `verify` (future), `prune` (future).
+Top-level commands: `backup`, `restore`, `list`, `verify`, `prune`.
 
 ## Commands Overview
 
