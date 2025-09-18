@@ -47,16 +47,16 @@ Top-level commands: `backup`, `restore`, `list`, `verify`, `prune`.
   - `incus-backup backup all --target dir:/mnt/backups/incus`
 
 - Back up everything to a restic repository (`RESTIC_PASSWORD` must be set)
-  - `incus-backup backup all --target restic:repo=/srv/restic`
+  - `incus-backup backup all --target restic:/srv/restic`
 
 - Back up to a remote restic repository over ssh
-  - `incus-backup backup instances web1 --target restic:repo=sftp:user@host:/srv/incus`
+  - `incus-backup backup instances web1 --target restic:sftp:user@host:/srv/incus`
 
 - Restore everything (apply config), replacing where needed, non-interactive
   - `incus-backup restore all --target dir:/mnt/backups/incus --apply-config --replace -y`
 
 - Restore a subset from a restic repository
-  - `incus-backup restore instances web1 db1 --target restic:repo=/srv/restic --skip-existing -y`
+  - `incus-backup restore instances web1 db1 --target restic:/srv/restic --skip-existing -y`
 
 - Back up selected instances and a custom volume
   - `incus-backup backup instances web1 db1 --target dir:/mnt/backups/incus`
@@ -114,8 +114,8 @@ A backup target must be configured.
 
 - Canonical: `--target` as a backend URI.
   - Directory backend: `--target dir:/mnt/nas/sysbackup/incus`
-  - Restic backend: `--target restic:/path` or
-    `--target restic:repo=https://...`
+  - Restic backend: `--target restic:/srv/restic` or
+    `--target restic:sftp:user@host:/srv/incus`
 - `--backend` may be provided but is inferred from `--target` when present.
 
 # CLI Syntax
