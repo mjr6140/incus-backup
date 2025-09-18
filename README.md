@@ -1,19 +1,21 @@
 # Incus Backup
 
-Reliable, testable backups and restores for Incus (https://linuxcontainers.org/incus/),
-designed to run on the host. It automates common backup/restore workflows while
-prioritizing safety (dry-runs, confirmations), auditability (manifests + checksums),
-and portability.
+`incus-backup` is a CLI that exports Incus projects, instances, volumes, and
+optional images to storage backends you control. Today it supports filesystem
+directories and restic repositories. It runs on the Incus host, talks to the
+Incus API directly, and keeps the workflow scriptable without shelling out to
+the `incus` binary.
 
-It is intended to run on the Incus host and produce backups that can be easily
-restored. It automates common backup and restore workflows while prioritizing
-safety and auditability.
+The goal is to make restores unsurprising: take snapshots when needed, write
+manifests with checksums, and ask before replacing anything. Use `--dry-run`
+to see exactly what will happen, then confirm with `--yes` or `--force` when
+you are ready.
 
 Incus docs on backups: https://linuxcontainers.org/incus/docs/main/backup/
 
-This tool uses the Incus API directly and orchestrates exports/imports for
-instances, volumes, images (optional), and declarative config (projects,
-profiles, networks, storage pool config) needed to recreate environment state.
+This tool orchestrates exports/imports for instances, volumes, images, and the
+declarative config (projects, profiles, networks, storage pool config) needed
+to recreate environment state.
 
 # CLI Syntax
 
@@ -44,8 +46,17 @@ Top-level commands: `backup`, `restore`, `list`, `verify` (future), `prune` (fut
 - Back up everything to a directory target
   - `incus-backup backup all --target dir:/mnt/backups/incus`
 
+- Back up everything to a restic repository (`RESTIC_PASSWORD` must be set)
+  - `incus-backup backup all --target restic:repo=/srv/restic`
+
+- Back up to a remote restic repository over ssh
+  - `incus-backup backup instances web1 --target restic:repo=sftp:user@host:/srv/incus`
+
 - Restore everything (apply config), replacing where needed, non-interactive
   - `incus-backup restore all --target dir:/mnt/backups/incus --apply-config --replace -y`
+
+- Restore a subset from a restic repository
+  - `incus-backup restore instances web1 db1 --target restic:repo=/srv/restic --skip-existing -y`
 
 - Back up selected instances and a custom volume
   - `incus-backup backup instances web1 db1 --target dir:/mnt/backups/incus`
@@ -90,10 +101,12 @@ Top-level commands: `backup`, `restore`, `list`, `verify` (future), `prune` (fut
 # Storage Backends
 
 - `directory` (default): write exports to a filesystem tree.
-- `restic` (future): pluggable backend via a `StorageBackend` interface. The restic CLI (>=0.18.0) must be installed and available on `PATH`; we stream backups over `restic backup --stdin` rather than staging tarballs on disk.
+- `restic`: streaming backend via the shared `StorageBackend` interface. The
+  restic CLI (>=0.18.0) must be installed and available on `PATH`; exports are
+  piped to `restic backup --stdin` instead of staging tarballs.
 
-The initial implementation targets `directory` only, with an interface to
-enable `restic` later without changing the CLI.
+Both backends share the same manifests and layout, so switching targets does
+not require CLI changes.
 
 # Backup Location
 
@@ -101,7 +114,8 @@ A backup target must be configured.
 
 - Canonical: `--target` as a backend URI.
   - Directory backend: `--target dir:/mnt/nas/sysbackup/incus`
-  - Future Restic: `--target restic:/path` or `--target restic:repo=https://...`
+  - Restic backend: `--target restic:/path` or
+    `--target restic:repo=https://...`
 - `--backend` may be provided but is inferred from `--target` when present.
 
 # CLI Syntax
