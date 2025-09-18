@@ -8,16 +8,14 @@
 - `assets/` — static files such as sample configs or templates.
 
 ## Build, Test, and Development Commands
-This repo uses scripts (no Makefile). Prefer these entry points:
+This repo uses helper scripts (no Makefile). Prefer these entry points:
 
-- `scripts/setup.sh` — install toolchain and local dependencies (e.g., golangci-lint).
-- `scripts/lint.sh` — run formatters/linters (e.g., `gofmt -s`, `golangci-lint run`).
-- `scripts/test.sh` — run unit tests with coverage (no integration).
-- `scripts/test_integration.sh` — run integration tests (see gating below).
-- `scripts/build.sh` — produce a local build artifact.
-- `scripts/run.sh` — run the CLI locally. Example: `scripts/run.sh -- --help`.
+- `scripts/test.sh` — run unit tests with cached module/build directories confined to the repo.
+- `scripts/test_integration_container.sh` — run integration tests inside the prepared container image (see gating below).
 
-If a Makefile is later added, it should delegate to these scripts.
+For other workflows (linting, builds, ad-hoc runs) use the standard Go toolchain directly (`gofmt`, `golangci-lint`, `go build ./...`, `go run ./...`) until dedicated scripts are introduced.
+
+If a Makefile is later added, it should delegate to these helpers or toolchain commands.
 
 ### Integration Test Gating
 - Disabled by default. Enable with: `INCUS_TESTS=1 go test -tags=integration ./...`
